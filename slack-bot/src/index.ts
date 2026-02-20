@@ -12,6 +12,7 @@ import { sendCommand } from './commands/send';
 import { inboxCommand } from './commands/inbox';
 import { closeDb } from './stores/db';
 import { clearAllMappings, getAllMappings } from './stores/party-mapping';
+import { initTimerManager, clearAllTimers } from './stores/secret-timers';
 import { discoverPackageId, allocateParty, setOperatorParty, listParties } from './services/canton';
 
 // Validate required environment variables
@@ -35,6 +36,9 @@ const app = new App({
 app.error(async (error) => {
   console.error('[APP ERROR]', error);
 });
+
+// Initialize timer manager for auto-expiring secret DMs
+initTimerManager(app.client);
 
 // Register all commands
 registerCommand(app);   // /cc-register
@@ -97,11 +101,13 @@ async function start(): Promise<void> {
 // Graceful shutdown
 process.on('SIGINT', () => {
   console.log('\nShutting down...');
+  clearAllTimers();
   closeDb();
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
+  clearAllTimers();
   closeDb();
   process.exit(0);
 });

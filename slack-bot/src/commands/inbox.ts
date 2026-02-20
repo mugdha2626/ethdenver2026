@@ -7,6 +7,7 @@ import type { App } from '@slack/bolt';
 import { queryContracts, exerciseChoice } from '../services/canton';
 import { getPartyBySlackId, getSlackIdByParty } from '../stores/party-mapping';
 import { errorMessage, header, inboxItem, section, context, divider } from '../utils/slack-blocks';
+import { getTrackedSecret, untrackSecret } from '../stores/secret-timers';
 
 export function inboxCommand(app: App): void {
   app.command('/cc-inbox', async ({ command, ack, respond }) => {
@@ -113,8 +114,8 @@ export function inboxCommand(app: App): void {
     }
   });
 
-  // Handle Acknowledge button
-  app.action('acknowledge_transfer', async ({ ack, body, respond }) => {
+  // Handle Acknowledge button (works for both DM push and ephemeral inbox)
+  app.action('acknowledge_transfer', async ({ ack, body, client, respond }) => {
     await ack();
 
     if (body.type !== 'block_actions' || !body.actions[0]) return;
@@ -126,6 +127,23 @@ export function inboxCommand(app: App): void {
     const mapping = getPartyBySlackId(slackUserId);
     if (!mapping || !contractId) return;
 
+    const acknowledgedBlocks = [
+      {
+        type: 'section' as const,
+        text: {
+          type: 'mrkdwn' as const,
+          text: '*Secret acknowledged and archived!*\n\nThe Canton contract has been archived. The secret no longer exists on the ledger.\n\nOnly you have it now. No Slack logs. No Canton record. Gone.',
+        },
+      },
+      {
+        type: 'context' as const,
+        elements: [
+          { type: 'mrkdwn' as const, text: `Archived at ${new Date().toISOString()}` },
+          { type: 'mrkdwn' as const, text: 'Powered by Canton sub-transaction privacy' },
+        ],
+      },
+    ];
+
     try {
       // Exercise Acknowledge choice -> archives the contract
       await exerciseChoice(
@@ -136,33 +154,46 @@ export function inboxCommand(app: App): void {
         {}
       );
 
-      // Replace the original message — removes the secret from screen
-      await respond({
-        replace_original: true,
-        text: 'Secret acknowledged and archived!',
-        blocks: [
-          {
-            type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: '*Secret acknowledged and archived!*\n\nThe Canton contract has been archived. The secret no longer exists on the ledger.\n\nOnly you have it now. No Slack logs. No Canton record. Gone.',
-            },
-          },
-          {
-            type: 'context',
-            elements: [
-              { type: 'mrkdwn', text: `Archived at ${new Date().toISOString()}` },
-              { type: 'mrkdwn', text: 'Powered by Canton sub-transaction privacy' },
-            ],
-          },
-        ],
-      });
+      // Try to update the tracked DM message directly
+      const trackedEntry = getTrackedSecret(contractId);
+      if (trackedEntry) {
+        await client.chat.update({
+          channel: trackedEntry.channelId,
+          ts: trackedEntry.messageTs,
+          blocks: acknowledgedBlocks,
+          text: 'Secret acknowledged and archived!',
+        });
+        untrackSecret(contractId);
+      } else {
+        // Fallback: bot may have restarted (timers lost), or came from ephemeral inbox
+        // Try respond() for ephemeral messages, fall back to a new DM
+        try {
+          await respond({
+            replace_original: true,
+            text: 'Secret acknowledged and archived!',
+            blocks: acknowledgedBlocks,
+          });
+        } catch {
+          await client.chat.postMessage({
+            channel: slackUserId,
+            blocks: acknowledgedBlocks,
+            text: 'Secret acknowledged and archived!',
+          });
+        }
+      }
     } catch (err) {
       console.error('Acknowledge error:', err);
-      await respond({
-        replace_original: false,
-        text: `Error acknowledging: ${err instanceof Error ? err.message : 'Unknown error'}`,
-      });
+      try {
+        await respond({
+          replace_original: false,
+          text: `Error acknowledging: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        });
+      } catch {
+        await client.chat.postMessage({
+          channel: slackUserId,
+          text: `Error acknowledging: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        });
+      }
     }
   });
 }

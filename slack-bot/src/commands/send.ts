@@ -6,7 +6,8 @@
 import type { App } from '@slack/bolt';
 import { createContract, getOperatorParty } from '../services/canton';
 import { getPartyBySlackId, getPartyByUsername } from '../stores/party-mapping';
-import { successMessage, errorMessage, notifyUser } from '../utils/slack-blocks';
+import { successMessage, errorMessage, notifyUser, inboxItem, header, divider, context } from '../utils/slack-blocks';
+import { trackSecret } from '../stores/secret-timers';
 
 export function sendCommand(app: App): void {
   app.command('/cc-send', async ({ command, ack, client, respond }) => {
@@ -166,7 +167,7 @@ export function sendCommand(app: App): void {
           ? new Date(sentAt.getTime() + Number(ttlSeconds) * 1000).toISOString()
           : null;
 
-      await createContract(mapping.cantonParty, 'SecretTransfer', {
+      const contractResult = await createContract(mapping.cantonParty, 'SecretTransfer', {
         sender: mapping.cantonParty,
         recipient: recipientParty,
         operator: getOperatorParty(),
@@ -177,25 +178,48 @@ export function sendCommand(app: App): void {
         expiresAt,
       });
 
+      const contractId = contractResult.contractId;
+      const senderDisplay = `<@${slackUserId}>`;
+
       // Notify sender
       await notifyUser(app.client, slackUserId, successMessage(
         'Secret Sent',
         `Secret \`${label}\` sent to <@${recipientSlackId}>.\n\n` +
           '*Only you and the recipient can see this on Canton.* No other node on the network received this data.\n\n' +
-          `The recipient can type \`/cc-inbox\` to retrieve it.`
+          `The recipient will receive a DM with the secret.`
       ), channelId);
 
-      // DM the recipient
+      // DM the recipient with the full secret + acknowledge button
       try {
-        await app.client.chat.postMessage({
-          channel: recipientSlackId,
-          blocks: successMessage(
-            'Secret Received',
-            `<@${slackUserId}> sent you a secret labeled \`${label}\`.\n\n` +
-              `Type \`/cc-inbox\` to view and acknowledge it.\n\n` +
-              `_This secret is stored on Canton and visible only to you and the sender. It will be removed after you acknowledge._`
+        const dmBlocks = [
+          header('Secret Received'),
+          divider(),
+          ...inboxItem(senderDisplay, label, description, secret, sentAt.toISOString(), contractId, expiresAt),
+          context(
+            'This secret is visible *only to you* on Canton.',
+            'Click "Acknowledge Receipt" to archive the transfer.'
           ),
+        ];
+
+        const result = await app.client.chat.postMessage({
+          channel: recipientSlackId,
+          blocks: dmBlocks,
+          text: `${senderDisplay} sent you a secret labeled '${label}'`,
         });
+
+        if (result.ts && result.channel) {
+          trackSecret(
+            contractId,
+            result.ts,
+            result.channel,
+            label,
+            senderDisplay,
+            expiresAt,
+            description,
+            secret,
+            sentAt.toISOString()
+          );
+        }
       } catch {
         console.warn(`Could not DM ${recipientSlackId}`);
       }
