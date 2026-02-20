@@ -14,6 +14,8 @@ import { closeDb } from './stores/db';
 import { clearAllMappings, getAllMappings } from './stores/party-mapping';
 import { initTimerManager, clearAllTimers } from './stores/secret-timers';
 import { discoverPackageId, allocateParty, setOperatorParty, listParties } from './services/canton';
+import { startWebServer } from './web/server';
+import { purgeExpiredTokens } from './stores/view-tokens';
 
 // Validate required environment variables
 const requiredEnvVars = ['SLACK_BOT_TOKEN', 'SLACK_APP_TOKEN'];
@@ -82,6 +84,14 @@ async function start(): Promise<void> {
     }
   }
 
+  // Start the web viewer for zero-knowledge secret viewing
+  const webPort = parseInt(process.env.WEB_PORT || '3100', 10);
+  startWebServer(webPort);
+
+  // Purge expired view tokens periodically
+  purgeExpiredTokens();
+  setInterval(purgeExpiredTokens, 60 * 60 * 1000);
+
   await app.start();
   console.log('');
   console.log('  ╔══════════════════════════════════════════════════╗');
@@ -89,6 +99,7 @@ async function start(): Promise<void> {
   console.log('  ║                                                  ║');
   console.log('  ║  Slack Bot:  Connected (Socket Mode)             ║');
   console.log(`  ║  Canton API: ${process.env.CANTON_JSON_API_URL || 'http://localhost:7575'}        ║`);
+  console.log(`  ║  Web Viewer: http://localhost:${webPort}                 ║`);
   console.log('  ║                                                  ║');
   console.log('  ║  Commands:                                       ║');
   console.log('  ║    /cc-register  - Register Canton identity      ║');

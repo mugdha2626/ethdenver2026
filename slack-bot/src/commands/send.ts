@@ -6,8 +6,11 @@
 import type { App } from '@slack/bolt';
 import { createContract, getOperatorParty } from '../services/canton';
 import { getPartyBySlackId, getPartyByUsername } from '../stores/party-mapping';
-import { successMessage, errorMessage, notifyUser, inboxItem, header, divider, context } from '../utils/slack-blocks';
+import { successMessage, errorMessage, notifyUser, inboxItemWithLink, header, divider, context } from '../utils/slack-blocks';
 import { trackSecret } from '../stores/secret-timers';
+import { createViewToken } from '../stores/view-tokens';
+
+const webBaseUrl = process.env.WEB_BASE_URL || 'http://localhost:3100';
 
 export function sendCommand(app: App): void {
   app.command('/cc-send', async ({ command, ack, client, respond }) => {
@@ -190,15 +193,19 @@ export function sendCommand(app: App): void {
           `The recipient will receive a DM with the secret.`
       ), channelId);
 
-      // DM the recipient with the full secret + acknowledge button
+      // Generate a one-time view token and build the web URL
+      const viewToken = createViewToken(contractId, recipientParty, recipientSlackId, expiresAt);
+      const viewUrl = `${webBaseUrl}/secret/${viewToken}`;
+
+      // DM the recipient — one-time link only, NO secret content
       try {
         const dmBlocks = [
           header('Secret Received'),
           divider(),
-          ...inboxItem(senderDisplay, label, description, secret, sentAt.toISOString(), contractId, expiresAt),
+          ...inboxItemWithLink(senderDisplay, label, description, sentAt.toISOString(), contractId, viewUrl, expiresAt),
           context(
-            'This secret is visible *only to you* on Canton.',
-            'Click "Acknowledge Receipt" to archive the transfer.'
+            'The secret is stored *only on Canton* — it never touches Slack.',
+            'Click the link above to view the secret in your browser (one-time use).'
           ),
         ];
 
@@ -217,8 +224,8 @@ export function sendCommand(app: App): void {
             senderDisplay,
             expiresAt,
             description,
-            secret,
-            sentAt.toISOString()
+            sentAt.toISOString(),
+            viewUrl
           );
         }
       } catch {

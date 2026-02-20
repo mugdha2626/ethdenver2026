@@ -124,7 +124,6 @@ export function inboxItem(
   sender: string,
   label: string,
   description: string,
-  secret: string,
   sentAt: string,
   contractId: string,
   expiresAt?: string | null
@@ -138,7 +137,44 @@ export function inboxItem(
   }
 
   blocks.push(
-    section(`*Secret:*\n\`\`\`${secret}\`\`\``),
+    actions(`ack-${contractId}`, {
+      text: 'View Secret',
+      actionId: 'view_secret',
+      value: contractId,
+    }, {
+      text: 'Acknowledge Receipt',
+      actionId: 'acknowledge_transfer',
+      value: contractId,
+      style: 'primary',
+    }),
+    divider(),
+  );
+
+  return blocks;
+}
+
+/** Build inbox item with a one-time web link instead of a "View Secret" button */
+export function inboxItemWithLink(
+  sender: string,
+  label: string,
+  description: string,
+  sentAt: string,
+  contractId: string,
+  viewUrl: string,
+  expiresAt?: string | null
+): AnyBlock[] {
+  const blocks: AnyBlock[] = [
+    section(
+      `*From:* ${sender}\n*Label:* \`${label}\`\n*Description:* ${description}\n*Sent:* ${sentAt}\n\n` +
+      `<${viewUrl}|Open Secret> — _one-time link, opens in browser_`
+    ),
+  ];
+
+  if (expiresAt) {
+    blocks.push(context(`_${formatTimeRemaining(expiresAt)}_`));
+  }
+
+  blocks.push(
     actions(`ack-${contractId}`, {
       text: 'Acknowledge Receipt',
       actionId: 'acknowledge_transfer',
