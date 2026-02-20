@@ -2,7 +2,8 @@
  * Reusable Slack Block Kit builders for ConfidentialConnect
  */
 
-import type { KnownBlock, Block, App } from '@slack/bolt';
+import type { App } from '@slack/bolt';
+import type { KnownBlock, Block } from '@slack/types';
 
 type AnyBlock = KnownBlock | Block;
 
@@ -107,6 +108,18 @@ export function formatTimeRemaining(expiresAt: string): string {
 }
 
 /** Build the inbox view for /cc-inbox */
+/** Build the "secret expired" replacement message for a DM */
+export function expiredSecretMessage(label: string, senderDisplay: string): AnyBlock[] {
+  return [
+    header('Secret Expired'),
+    section(
+      `The secret \`${label}\` from ${senderDisplay} has expired and is no longer available.\n\n` +
+        'The Canton contract will be archived automatically.'
+    ),
+    context('Expired secrets cannot be retrieved.', 'Powered by Canton sub-transaction privacy'),
+  ];
+}
+
 export function inboxItem(
   sender: string,
   label: string,
