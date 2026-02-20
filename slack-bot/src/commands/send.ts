@@ -129,6 +129,7 @@ export function sendCommand(app: App): void {
               },
               options: [
                 { text: { type: 'plain_text', text: 'No expiration' }, value: 'none' },
+                { text: { type: 'plain_text', text: '30 seconds' }, value: '30' },
                 { text: { type: 'plain_text', text: '5 minutes' }, value: '300' },
                 { text: { type: 'plain_text', text: '1 hour' }, value: '3600' },
                 { text: { type: 'plain_text', text: '24 hours' }, value: '86400' },
