@@ -1,14 +1,20 @@
 /**
  * Express web server for zero-knowledge secret viewing.
  * Runs on a separate port from Slack's Socket Mode connection.
+ *
+ * This server NEVER sees the secret. It validates the one-time token,
+ * generates a short-lived read-only JWT, and redirects the browser
+ * to Canton's static viewer page where the secret is fetched client-side.
  */
 
 import express from 'express';
 import { consumeViewToken } from '../stores/view-tokens';
-import { queryContracts } from '../services/canton';
-import { renderSecretPage, renderErrorPage, renderUnfurlPage } from './template';
+import { getPackageId } from '../services/canton';
+import { generateViewerJwt } from '../utils/jwt';
+import { renderErrorPage, renderUnfurlPage } from './template';
 
 const TOKEN_REGEX = /^[a-f0-9]{64}$/;
+const CANTON_VIEWER_BASE_URL = process.env.CANTON_VIEWER_BASE_URL || 'http://localhost:7575';
 
 export function startWebServer(port: number): void {
   const app = express();
@@ -18,7 +24,6 @@ export function startWebServer(port: number): void {
     res.set('Cache-Control', 'no-store');
     res.set('X-Frame-Options', 'DENY');
     res.set('Referrer-Policy', 'no-referrer');
-    res.set('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'");
     next();
   });
 
@@ -49,40 +54,32 @@ export function startWebServer(port: number): void {
       return;
     }
 
-    try {
-      // Fetch the secret from Canton using the recipient's party
-      const transfers = await queryContracts(
-        record.canton_party,
-        'SecretTransfer',
-        { recipient: record.canton_party }
-      );
-
-      const transfer = transfers.find((t) => t.contractId === record.contract_id);
-      if (!transfer) {
-        res.status(404).send(renderErrorPage(
-          'Secret Not Found',
-          'The secret may have been acknowledged or expired on the Canton ledger.'
-        ));
-        return;
-      }
-
-      const payload = transfer.payload as Record<string, any>;
-
-      res.status(200).send(renderSecretPage({
-        label: payload.label,
-        description: payload.description,
-        secret: payload.encryptedSecret,
-        senderParty: payload.sender,
-        sentAt: payload.sentAt,
-        expiresAt: payload.expiresAt || null,
-      }));
-    } catch (err) {
-      console.error('[web] Error fetching secret from Canton:', err);
+    // Build the template ID for the query
+    const pkgId = getPackageId();
+    if (!pkgId) {
       res.status(500).send(renderErrorPage(
         'Server Error',
-        'Could not retrieve the secret. Please try again later.'
+        'Package ID not available. The Canton ledger may not be initialized yet.'
       ));
+      return;
     }
+
+    const templateId = `${pkgId}:Main:SecretTransfer`;
+
+    // Generate a short-lived read-only JWT (60 seconds, no write permissions)
+    const viewerJwt = generateViewerJwt(record.canton_party);
+
+    // Build redirect URL with parameters in the fragment (never sent to servers)
+    const fragment = [
+      'jwt=' + encodeURIComponent(viewerJwt),
+      'cid=' + encodeURIComponent(record.contract_id),
+      'tid=' + encodeURIComponent(templateId),
+      'party=' + encodeURIComponent(record.canton_party),
+    ].join('&');
+
+    const viewerUrl = `${CANTON_VIEWER_BASE_URL}/viewer/index.html#${fragment}`;
+
+    res.redirect(302, viewerUrl);
   });
 
   app.listen(port, () => {

@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'">
+  <meta name="robots" content="noindex, nofollow">
+  <title>ConfidentialConnect — Secret</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0d1117;
+      color: #c9d1d9;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+    .container {
+      max-width: 640px;
+      width: 100%;
+    }
+    h1 {
+      color: #58a6ff;
+      font-size: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .loading {
+      text-align: center;
+      padding: 3rem 1rem;
+    }
+    .loading p {
+      color: #8b949e;
+      font-size: 0.95rem;
+      margin-bottom: 0.5rem;
+    }
+    .spinner {
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      border: 3px solid #30363d;
+      border-top-color: #58a6ff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 1rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .meta {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .meta-row {
+      display: flex;
+      margin-bottom: 0.5rem;
+    }
+    .meta-row:last-child { margin-bottom: 0; }
+    .meta-label {
+      color: #8b949e;
+      width: 100px;
+      flex-shrink: 0;
+      font-size: 0.85rem;
+    }
+    .meta-value {
+      color: #c9d1d9;
+      font-size: 0.85rem;
+      word-break: break-all;
+    }
+    .secret-box {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+    .secret-label {
+      color: #8b949e;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+    }
+    .secret-content {
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+      font-size: 0.9rem;
+      color: #f0f6fc;
+      white-space: pre-wrap;
+      word-break: break-all;
+      line-height: 1.5;
+    }
+    .actions {
+      display: flex;
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+    button {
+      background: #21262d;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 0.5rem 1rem;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button:hover { background: #30363d; }
+    .btn-copy { background: #238636; border-color: #2ea043; color: #fff; }
+    .btn-copy:hover { background: #2ea043; }
+    .timer {
+      color: #8b949e;
+      font-size: 0.8rem;
+      text-align: center;
+    }
+    .cleared {
+      text-align: center;
+      padding: 3rem 1rem;
+    }
+    .cleared h2 {
+      color: #8b949e;
+      font-size: 1.2rem;
+      margin-bottom: 0.5rem;
+    }
+    .cleared p {
+      color: #484f58;
+      font-size: 0.85rem;
+    }
+    .error-view {
+      text-align: center;
+      padding: 3rem 1rem;
+    }
+    .error-view h2 {
+      color: #f85149;
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+    }
+    .error-view p {
+      color: #8b949e;
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+    @media print {
+      .secret-content { color: transparent !important; }
+      .secret-content::after { content: '[REDACTED]'; color: #8b949e; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container" id="loading-view">
+    <h1>ConfidentialConnect</h1>
+    <div class="loading">
+      <div class="spinner"></div>
+      <p>Fetching secret from Canton ledger...</p>
+    </div>
+  </div>
+
+  <div class="container" id="secret-view" style="display:none;">
+    <h1>ConfidentialConnect</h1>
+    <div class="meta" id="meta-section"></div>
+    <div class="secret-box">
+      <div class="secret-label">Secret</div>
+      <div class="secret-content" id="secret-text"></div>
+    </div>
+    <div class="actions">
+      <button class="btn-copy" id="copy-btn">Copy to Clipboard</button>
+      <button id="clear-btn">Clear Now</button>
+    </div>
+    <div class="timer" id="timer">This page will auto-clear in 5 minutes.</div>
+  </div>
+
+  <div class="container cleared" id="cleared-view" style="display:none;">
+    <h2>Secret Cleared</h2>
+    <p>The secret has been removed from this page for your security.</p>
+    <p>You can close this tab.</p>
+  </div>
+
+  <div class="container error-view" id="error-view" style="display:none;">
+    <h2 id="error-title"></h2>
+    <p id="error-message"></p>
+  </div>
+
+  <script>
+    (function() {
+      'use strict';
+
+      // --- Parse parameters from URL fragment ---
+      var hash = window.location.hash.substring(1);
+
+      // Clear fragment from address bar immediately (fragments never sent to servers,
+      // but clear anyway to prevent shoulder-surfing or accidental sharing)
+      try { history.replaceState(null, '', window.location.pathname); } catch(e) {}
+
+      if (!hash) {
+        showError('Missing Parameters', 'No viewing parameters were provided. Please use the link from your Slack DM.');
+        return;
+      }
+
+      var params = {};
+      hash.split('&').forEach(function(pair) {
+        var parts = pair.split('=');
+        if (parts.length === 2) {
+          params[decodeURIComponent(parts[0])] = decodeURIComponent(parts[1]);
+        }
+      });
+
+      var token = params.jwt;
+      var contractId = params.cid;
+      var templateId = params.tid;
+      var party = params.party;
+
+      if (!token || !contractId || !templateId || !party) {
+        showError('Missing Parameters', 'The link is incomplete. Please use the link from your Slack DM.');
+        return;
+      }
+
+      // --- Fetch secret from Canton (same-origin request) ---
+      fetch('/v1/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({
+          templateIds: [templateId],
+          query: { recipient: party }
+        })
+      })
+      .then(function(res) {
+        if (res.status === 401) {
+          throw { type: 'auth', message: 'JWT expired or invalid. The viewing window (60 seconds) may have passed. Ask the sender to share the secret again.' };
+        }
+        if (!res.ok) {
+          throw { type: 'server', message: 'Canton API returned status ' + res.status + '. Please try again.' };
+        }
+        return res.json();
+      })
+      .then(function(data) {
+        // Null out JWT from memory
+        token = null;
+
+        if (!data.result || !Array.isArray(data.result)) {
+          throw { type: 'data', message: 'Unexpected response format from Canton.' };
+        }
+
+        // Find the specific contract by ID
+        var contract = null;
+        for (var i = 0; i < data.result.length; i++) {
+          if (data.result[i].contractId === contractId) {
+            contract = data.result[i];
+            break;
+          }
+        }
+
+        if (!contract) {
+          throw { type: 'notfound', message: 'The secret was not found. It may have been acknowledged or expired on the Canton ledger.' };
+        }
+
+        var payload = contract.payload;
+        renderSecret(payload);
+      })
+      .catch(function(err) {
+        // Null out JWT on error too
+        token = null;
+
+        if (err && err.type) {
+          switch(err.type) {
+            case 'auth':
+              showError('Authentication Failed', err.message);
+              break;
+            case 'notfound':
+              showError('Secret Not Found', err.message);
+              break;
+            default:
+              showError('Error', err.message);
+          }
+        } else {
+          showError('Connection Error', 'Could not connect to Canton ledger. Please check that the service is running and try again.');
+        }
+      });
+
+      // --- Render the secret in the DOM ---
+      function renderSecret(payload) {
+        var metaSection = document.getElementById('meta-section');
+
+        var rows = [
+          { label: 'Label', value: payload.label },
+          { label: 'Description', value: payload.description },
+          { label: 'From', value: payload.sender },
+          { label: 'Sent', value: payload.sentAt }
+        ];
+
+        if (payload.expiresAt) {
+          rows.push({ label: 'Expires', value: payload.expiresAt });
+        }
+
+        rows.forEach(function(row) {
+          var div = document.createElement('div');
+          div.className = 'meta-row';
+
+          var labelSpan = document.createElement('span');
+          labelSpan.className = 'meta-label';
+          labelSpan.textContent = row.label;
+
+          var valueSpan = document.createElement('span');
+          valueSpan.className = 'meta-value';
+          valueSpan.textContent = row.value || '';
+
+          div.appendChild(labelSpan);
+          div.appendChild(valueSpan);
+          metaSection.appendChild(div);
+        });
+
+        // Render secret using textContent (XSS-safe — no innerHTML)
+        document.getElementById('secret-text').textContent = payload.encryptedSecret;
+
+        // Show the secret view, hide loading
+        document.getElementById('loading-view').style.display = 'none';
+        document.getElementById('secret-view').style.display = 'block';
+
+        // Start auto-clear timer
+        startAutoClear();
+      }
+
+      // --- Auto-clear logic ---
+      var AUTO_CLEAR_MS = 5 * 60 * 1000;
+      var startTime = Date.now();
+      var cleared = false;
+      var autoTimer = null;
+
+      function clearPage() {
+        if (cleared) return;
+        cleared = true;
+        document.getElementById('loading-view').style.display = 'none';
+        document.getElementById('secret-view').style.display = 'none';
+        document.getElementById('error-view').style.display = 'none';
+        document.getElementById('cleared-view').style.display = 'block';
+        try { history.replaceState(null, '', window.location.pathname); } catch(e) {}
+      }
+
+      function startAutoClear() {
+        startTime = Date.now();
+        autoTimer = setTimeout(clearPage, AUTO_CLEAR_MS);
+
+        // Update countdown
+        setInterval(function() {
+          if (cleared) return;
+          var remaining = AUTO_CLEAR_MS - (Date.now() - startTime);
+          if (remaining <= 0) return;
+          var mins = Math.floor(remaining / 60000);
+          var secs = Math.floor((remaining % 60000) / 1000);
+          document.getElementById('timer').textContent =
+            'This page will auto-clear in ' + mins + 'm ' + secs + 's.';
+        }, 1000);
+      }
+
+      // Clear on tab switch
+      document.addEventListener('visibilitychange', function() {
+        if (document.hidden && !cleared && document.getElementById('secret-view').style.display !== 'none') {
+          clearPage();
+        }
+      });
+
+      // Redact on print
+      window.addEventListener('beforeprint', function() {
+        var el = document.getElementById('secret-text');
+        if (el) el.textContent = '[REDACTED]';
+      });
+
+      // Copy button
+      document.getElementById('copy-btn').addEventListener('click', function() {
+        if (cleared) return;
+        var text = document.getElementById('secret-text').textContent;
+        navigator.clipboard.writeText(text).then(function() {
+          var btn = document.getElementById('copy-btn');
+          btn.textContent = 'Copied!';
+          setTimeout(function() { btn.textContent = 'Copy to Clipboard'; }, 2000);
+        });
+      });
+
+      // Clear now button
+      document.getElementById('clear-btn').addEventListener('click', function() {
+        if (autoTimer) clearTimeout(autoTimer);
+        clearPage();
+      });
+
+      // --- Error display ---
+      function showError(title, message) {
+        document.getElementById('loading-view').style.display = 'none';
+        document.getElementById('error-title').textContent = title;
+        document.getElementById('error-message').textContent = message;
+        document.getElementById('error-view').style.display = 'block';
+      }
+    })();
+  </script>
+</body>
+</html>

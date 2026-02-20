@@ -32,3 +32,20 @@ export function generateJwt(party: string): string {
     expiresIn: '24h',
   });
 }
+
+/**
+ * Generate a short-lived read-only JWT for the static viewer page.
+ * actAs: [] means no write permissions — only reads allowed.
+ * Expires in 60 seconds to minimize exposure window.
+ */
+export function generateViewerJwt(party: string): string {
+  return jwt.sign({
+    sub: party,
+    'https://daml.com/ledger-api': {
+      ledgerId: 'sandbox',
+      applicationId: 'confidential-connect-viewer',
+      actAs: [],
+      readAs: [party],
+    },
+  }, JWT_SECRET, { algorithm: 'HS256', expiresIn: '60s' });
+}
