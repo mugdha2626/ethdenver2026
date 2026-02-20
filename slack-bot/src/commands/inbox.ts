@@ -29,7 +29,32 @@ export function inboxCommand(app: App): void {
         { recipient: mapping.cantonParty }
       );
 
-      if (transfers.length === 0) {
+      // Separate expired and active transfers
+      const now = new Date();
+      const active: typeof transfers = [];
+
+      for (const transfer of transfers) {
+        const payload = transfer.payload as Record<string, any>;
+        const expiresAt = payload.expiresAt as string | null;
+        if (expiresAt && new Date(expiresAt) < now) {
+          // Expired — try to archive on Canton, but don't block on failure
+          try {
+            await exerciseChoice(
+              mapping.cantonParty,
+              'SecretTransfer',
+              transfer.contractId,
+              'RevokeTransfer',
+              {}
+            );
+          } catch {
+            // Operator may not have authority; just hide client-side
+          }
+          continue;
+        }
+        active.push(transfer);
+      }
+
+      if (active.length === 0) {
         await respond({
           response_type: 'ephemeral',
           blocks: [
@@ -44,7 +69,7 @@ export function inboxCommand(app: App): void {
       // Build inbox view
       const blocks: any[] = [header('Your Inbox'), divider()];
 
-      for (const transfer of transfers) {
+      for (const transfer of active) {
         const payload = transfer.payload as Record<string, any>;
         const senderParty = payload.sender as string;
         const senderMapping = getSlackIdByParty(senderParty);
@@ -59,7 +84,8 @@ export function inboxCommand(app: App): void {
             payload.description,
             payload.encryptedSecret,
             payload.sentAt,
-            transfer.contractId
+            transfer.contractId,
+            payload.expiresAt
           )
         );
       }

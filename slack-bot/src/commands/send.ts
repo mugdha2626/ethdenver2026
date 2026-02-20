@@ -114,6 +114,28 @@ export function sendCommand(app: App): void {
             },
             optional: true,
           },
+          {
+            type: 'input',
+            block_id: 'ttl_input',
+            label: { type: 'plain_text', text: 'Expiration' },
+            element: {
+              type: 'static_select',
+              action_id: 'ttl_value',
+              placeholder: { type: 'plain_text', text: 'Choose expiration...' },
+              initial_option: {
+                text: { type: 'plain_text', text: 'No expiration' },
+                value: 'none',
+              },
+              options: [
+                { text: { type: 'plain_text', text: 'No expiration' }, value: 'none' },
+                { text: { type: 'plain_text', text: '5 minutes' }, value: '300' },
+                { text: { type: 'plain_text', text: '1 hour' }, value: '3600' },
+                { text: { type: 'plain_text', text: '24 hours' }, value: '86400' },
+                { text: { type: 'plain_text', text: '7 days' }, value: '604800' },
+              ],
+            },
+            optional: false,
+          },
         ],
       },
     });
@@ -129,6 +151,7 @@ export function sendCommand(app: App): void {
     const secret = view.state.values.secret_input.secret_value.value!;
     const description =
       view.state.values.description_input?.description_value?.value || 'No description';
+    const ttlSeconds = view.state.values.ttl_input.ttl_value.selected_option?.value || 'none';
     const slackUserId = body.user.id;
 
     const mapping = getPartyBySlackId(slackUserId);
@@ -137,6 +160,12 @@ export function sendCommand(app: App): void {
     try {
       // Create SecretTransfer contract on Canton
       // ONLY sender and recipient nodes receive this data
+      const sentAt = new Date();
+      const expiresAt =
+        ttlSeconds !== 'none'
+          ? new Date(sentAt.getTime() + Number(ttlSeconds) * 1000).toISOString()
+          : null;
+
       await createContract(mapping.cantonParty, 'SecretTransfer', {
         sender: mapping.cantonParty,
         recipient: recipientParty,
@@ -144,8 +173,8 @@ export function sendCommand(app: App): void {
         label,
         encryptedSecret: secret,
         description,
-        sentAt: new Date().toISOString(),
-        expiresAt: null,
+        sentAt: sentAt.toISOString(),
+        expiresAt,
       });
 
       // Notify sender

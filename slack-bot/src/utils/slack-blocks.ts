@@ -93,6 +93,19 @@ export function errorMessage(title: string, details: string): AnyBlock[] {
   ];
 }
 
+/** Format remaining time until expiration in a human-readable string */
+export function formatTimeRemaining(expiresAt: string): string {
+  const diff = new Date(expiresAt).getTime() - Date.now();
+  if (diff <= 0) return 'Expired';
+  const minutes = Math.floor(diff / 60_000);
+  if (minutes < 1) return 'Expires in less than a minute';
+  if (minutes < 60) return `Expires in ${minutes} minute${minutes === 1 ? '' : 's'}`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `Expires in ${hours} hour${hours === 1 ? '' : 's'}`;
+  const days = Math.floor(hours / 24);
+  return `Expires in ${days} day${days === 1 ? '' : 's'}`;
+}
+
 /** Build the inbox view for /cc-inbox */
 export function inboxItem(
   sender: string,
@@ -100,10 +113,18 @@ export function inboxItem(
   description: string,
   secret: string,
   sentAt: string,
-  contractId: string
+  contractId: string,
+  expiresAt?: string | null
 ): AnyBlock[] {
-  return [
+  const blocks: AnyBlock[] = [
     section(`*From:* ${sender}\n*Label:* \`${label}\`\n*Description:* ${description}\n*Sent:* ${sentAt}`),
+  ];
+
+  if (expiresAt) {
+    blocks.push(context(`_${formatTimeRemaining(expiresAt)}_`));
+  }
+
+  blocks.push(
     section(`*Secret:*\n\`\`\`${secret}\`\`\``),
     actions(`ack-${contractId}`, {
       text: 'Acknowledge Receipt',
@@ -112,6 +133,8 @@ export function inboxItem(
       style: 'primary',
     }),
     divider(),
-  ];
+  );
+
+  return blocks;
 }
 
