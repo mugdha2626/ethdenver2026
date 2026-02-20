@@ -1,0 +1,42 @@
+# ConfidentialConnect - Docker Compose (optional, for final demo)
+# For development, run Canton sandbox and slack-bot natively
+
+version: '3.8'
+
+services:
+  # Canton Sandbox + JSON API
+  canton:
+    image: digitalasset/canton-open-source:2.9.3
+    ports:
+      - "6865:6865"   # Ledger API (gRPC)
+      - "7575:7575"   # JSON API (HTTP)
+    volumes:
+      - ./daml/.daml/dist:/opt/daml/dist
+    command: >
+      sh -c "
+        daml sandbox --dar /opt/daml/dist/confidential-connect-0.1.0.dar --port 6865 &
+        sleep 5 &&
+        daml json-api --ledger-host localhost --ledger-port 6865 --http-port 7575 --allow-insecure-tokens
+      "
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7575/v1/query"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Slack Bot
+  slack-bot:
+    build: ./slack-bot
+    env_file: .env
+    environment:
+      - CANTON_JSON_API_URL=http://canton:7575
+      - DB_PATH=/app/data/cc.db
+    volumes:
+      - bot-data:/app/data
+    depends_on:
+      canton:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  bot-data:

@@ -1,0 +1,9 @@
+sdk-version: 2.9.3
+name: confidential-connect
+source: .
+version: 0.1.0
+dependencies:
+  - daml-prim
+  - daml-stdlib
+build-options:
+  - --target=2.1
