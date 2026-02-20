@@ -6,7 +6,7 @@
 import type { App } from '@slack/bolt';
 import { createContract, getOperatorParty } from '../services/canton';
 import { getPartyBySlackId } from '../stores/party-mapping';
-import { successMessage, errorMessage } from '../utils/slack-blocks';
+import { successMessage, errorMessage, notifyUser } from '../utils/slack-blocks';
 
 export function sendCommand(app: App): void {
   app.command('/cc-send', async ({ command, ack, client, respond }) => {
@@ -167,16 +167,12 @@ export function sendCommand(app: App): void {
       });
 
       // Notify sender
-      await app.client.chat.postEphemeral({
-        channel: channelId,
-        user: slackUserId,
-        blocks: successMessage(
-          'Secret Sent',
-          `Secret \`${label}\` sent to <@${recipientSlackId}>.\n\n` +
-            '*Only you and the recipient can see this on Canton.* No other node on the network received this data.\n\n' +
-            `The recipient can type \`/cc-inbox\` to retrieve it.`
-        ),
-      });
+      await notifyUser(app.client, slackUserId, successMessage(
+        'Secret Sent',
+        `Secret \`${label}\` sent to <@${recipientSlackId}>.\n\n` +
+          '*Only you and the recipient can see this on Canton.* No other node on the network received this data.\n\n' +
+          `The recipient can type \`/cc-inbox\` to retrieve it.`
+      ), channelId);
 
       // DM the recipient
       try {
@@ -194,14 +190,10 @@ export function sendCommand(app: App): void {
       }
     } catch (err) {
       console.error('Send error:', err);
-      await app.client.chat.postEphemeral({
-        channel: channelId,
-        user: slackUserId,
-        blocks: errorMessage(
-          'Send Failed',
-          `Error: ${err instanceof Error ? err.message : 'Unknown error'}`
-        ),
-      });
+      await notifyUser(app.client, slackUserId, errorMessage(
+        'Send Failed',
+        `Error: ${err instanceof Error ? err.message : 'Unknown error'}`
+      ), channelId);
     }
   });
 }

@@ -8,18 +8,17 @@ import { createContract, fetchByKey, getOperatorParty } from '../services/canton
 import { generateSalt, computeCommitment } from '../services/crypto';
 import { saveSalt } from '../stores/salt-store';
 import { getPartyBySlackId } from '../stores/party-mapping';
-import { successMessage, errorMessage } from '../utils/slack-blocks';
+import { successMessage, errorMessage, notifyUser } from '../utils/slack-blocks';
 
 export function commitCommand(app: App): void {
   // Handle the slash command - opens a modal
-  app.command('/cc-commit', async ({ command, ack, client }) => {
+  app.command('/cc-commit', async ({ command, ack, client, respond }) => {
     await ack();
 
     const mapping = getPartyBySlackId(command.user_id);
     if (!mapping) {
-      await client.chat.postEphemeral({
-        channel: command.channel_id,
-        user: command.user_id,
+      await respond({
+        response_type: 'ephemeral',
         blocks: errorMessage('Not Registered', 'Please run `/cc-register` first.'),
       });
       return;
@@ -27,9 +26,8 @@ export function commitCommand(app: App): void {
 
     const label = command.text.trim();
     if (!label) {
-      await client.chat.postEphemeral({
-        channel: command.channel_id,
-        user: command.user_id,
+      await respond({
+        response_type: 'ephemeral',
         blocks: errorMessage('Missing Label', 'Usage: `/cc-commit <label>`\nExample: `/cc-commit aws`'),
       });
       return;
@@ -86,14 +84,10 @@ export function commitCommand(app: App): void {
         label,
       ]);
       if (existing) {
-        await app.client.chat.postEphemeral({
-          channel: channelId,
-          user: slackUserId,
-          blocks: errorMessage(
-            'Already Committed',
-            `A secret with label \`${label}\` already exists. Use a different label or revoke the existing one.`
-          ),
-        });
+        await notifyUser(app.client, slackUserId, errorMessage(
+          'Already Committed',
+          `A secret with label \`${label}\` already exists. Use a different label or revoke the existing one.`
+        ), channelId);
         return;
       }
 
@@ -120,26 +114,18 @@ export function commitCommand(app: App): void {
 
       // Secret is now garbage collected - we only have the hash
 
-      await app.client.chat.postEphemeral({
-        channel: channelId,
-        user: slackUserId,
-        blocks: successMessage(
-          'Secret Committed',
-          `*Label:* \`${label}\`\n*Hash:* \`${commitment.substring(0, 16)}...\`\n\n` +
-            'Your secret was hashed and the original was discarded. Only you can see this commitment on Canton.\n\n' +
-            `Next: \`/cc-verify ${label}\` to live-verify it against an external API.`
-        ),
-      });
+      await notifyUser(app.client, slackUserId, successMessage(
+        'Secret Committed',
+        `*Label:* \`${label}\`\n*Hash:* \`${commitment.substring(0, 16)}...\`\n\n` +
+          'Your secret was hashed and the original was discarded. Only you can see this commitment on Canton.\n\n' +
+          `Next: \`/cc-verify ${label}\` to live-verify it against an external API.`
+      ), channelId);
     } catch (err) {
       console.error('Commit error:', err);
-      await app.client.chat.postEphemeral({
-        channel: channelId,
-        user: slackUserId,
-        blocks: errorMessage(
-          'Commit Failed',
-          `Error: ${err instanceof Error ? err.message : 'Unknown error'}`
-        ),
-      });
+      await notifyUser(app.client, slackUserId, errorMessage(
+        'Commit Failed',
+        `Error: ${err instanceof Error ? err.message : 'Unknown error'}`
+      ), channelId);
     }
   });
 }

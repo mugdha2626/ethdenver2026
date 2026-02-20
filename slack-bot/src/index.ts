@@ -16,7 +16,9 @@ import { inboxCommand } from './commands/inbox';
 import { auditCommand } from './commands/audit';
 import { statusCommand } from './commands/status';
 import { closeDb } from './stores/db';
-import { discoverPackageId, allocateParty, setOperatorParty } from './services/canton';
+import { clearAllMappings, getAllMappings } from './stores/party-mapping';
+import { clearAllSalts } from './stores/salt-store';
+import { discoverPackageId, allocateParty, setOperatorParty, listParties } from './services/canton';
 
 // Load verifiers (side-effect: registers them)
 import './services/verifiers/aws';
@@ -38,6 +40,11 @@ const app = new App({
   appToken: process.env.SLACK_APP_TOKEN,
   socketMode: true,
   logLevel: process.env.LOG_LEVEL === 'debug' ? LogLevel.DEBUG : LogLevel.INFO,
+});
+
+// Global error handler
+app.error(async (error) => {
+  console.error('[APP ERROR]', error);
 });
 
 // Register all commands
@@ -75,6 +82,19 @@ async function start(): Promise<void> {
     }
   }
   await discoverPackageId();
+
+  // Check for stale party mappings (Canton sandbox may have been restarted)
+  const existingMappings = getAllMappings();
+  if (existingMappings.length > 0) {
+    const cantonParties = await listParties();
+    const anyValid = existingMappings.some((m) => cantonParties.includes(m.cantonParty));
+    if (!anyValid) {
+      console.log('  Detected fresh Canton sandbox — clearing stale local data...');
+      clearAllMappings();
+      clearAllSalts();
+    }
+  }
+
   await app.start();
   console.log('');
   console.log('  ╔══════════════════════════════════════════════════╗');

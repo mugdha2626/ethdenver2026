@@ -69,3 +69,11 @@ export function getAllMappings(): PartyMapping[] {
   const rows = db.prepare('SELECT * FROM party_mapping').all() as RawRow[];
   return rows.map(rowToMapping);
 }
+
+/**
+ * Clear all party mappings (e.g., when Canton sandbox is restarted)
+ */
+export function clearAllMappings(): void {
+  const db = getDb();
+  db.prepare('DELETE FROM party_mapping').run();
+}

@@ -4,7 +4,7 @@
 
 import type { App } from '@slack/bolt';
 import { allocateParty, createContract, getOperatorParty, listParties } from '../services/canton';
-import { savePartyMapping, getPartyBySlackId } from '../stores/party-mapping';
+import { savePartyMapping, getPartyBySlackId, clearAllMappings } from '../stores/party-mapping';
 import { successMessage, errorMessage } from '../utils/slack-blocks';
 
 export function registerCommand(app: App): void {
@@ -18,14 +18,20 @@ export function registerCommand(app: App): void {
       // Check if already registered
       const existing = getPartyBySlackId(slackUserId);
       if (existing) {
-        await respond({
-          response_type: 'ephemeral',
-          blocks: successMessage(
-            'Already Registered',
-            `You're already registered as \`${existing.cantonParty}\`. You're good to go!`
-          ),
-        });
-        return;
+        // Validate the party still exists on Canton (sandbox may have been restarted)
+        const parties = await listParties();
+        if (parties.includes(existing.cantonParty)) {
+          await respond({
+            response_type: 'ephemeral',
+            blocks: successMessage(
+              'Already Registered',
+              `You're already registered as \`${existing.cantonParty}\`. You're good to go!`
+            ),
+          });
+          return;
+        }
+        // Party no longer exists on Canton — clear stale mapping and re-register
+        console.log(`Stale party for ${slackUserId}, re-registering...`);
       }
 
       // Allocate a new Canton party (or reuse if already allocated on ledger)

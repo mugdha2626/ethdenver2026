@@ -9,17 +9,16 @@ import { verifyCommitment } from '../services/crypto';
 import { getSalt } from '../stores/salt-store';
 import { getPartyBySlackId } from '../stores/party-mapping';
 import { getVerifier, getAvailableServices, detectService } from '../services/verifiers';
-import { successMessage, errorMessage, section, context, divider } from '../utils/slack-blocks';
+import { successMessage, errorMessage, section, context, divider, notifyUser } from '../utils/slack-blocks';
 
 export function verifyCommand(app: App): void {
-  app.command('/cc-verify', async ({ command, ack, client }) => {
+  app.command('/cc-verify', async ({ command, ack, client, respond }) => {
     await ack();
 
     const mapping = getPartyBySlackId(command.user_id);
     if (!mapping) {
-      await client.chat.postEphemeral({
-        channel: command.channel_id,
-        user: command.user_id,
+      await respond({
+        response_type: 'ephemeral',
         blocks: errorMessage('Not Registered', 'Please run `/cc-register` first.'),
       });
       return;
@@ -27,9 +26,8 @@ export function verifyCommand(app: App): void {
 
     const label = command.text.trim();
     if (!label) {
-      await client.chat.postEphemeral({
-        channel: command.channel_id,
-        user: command.user_id,
+      await respond({
+        response_type: 'ephemeral',
         blocks: errorMessage(
           'Missing Label',
           `Usage: \`/cc-verify <label>\`\nExample: \`/cc-verify aws\`\n\nAvailable services: ${getAvailableServices().join(', ')}`
@@ -44,9 +42,8 @@ export function verifyCommand(app: App): void {
       label,
     ]);
     if (!commitment) {
-      await client.chat.postEphemeral({
-        channel: command.channel_id,
-        user: command.user_id,
+      await respond({
+        response_type: 'ephemeral',
         blocks: errorMessage(
           'No Commitment Found',
           `No secret committed with label \`${label}\`. Run \`/cc-commit ${label}\` first.`
@@ -126,11 +123,7 @@ export function verifyCommand(app: App): void {
       // Step 1: Verify the secret matches the commitment hash
       const saltEntry = getSalt(mapping.cantonParty, label);
       if (!saltEntry) {
-        await app.client.chat.postEphemeral({
-          channel: channelId,
-          user: slackUserId,
-          blocks: errorMessage('Salt Not Found', 'Internal error: salt missing for this commitment.'),
-        });
+        await notifyUser(app.client, slackUserId, errorMessage('Salt Not Found', 'Internal error: salt missing for this commitment.'), channelId);
         return;
       }
 
@@ -140,11 +133,7 @@ export function verifyCommand(app: App): void {
         label,
       ]);
       if (!commitment) {
-        await app.client.chat.postEphemeral({
-          channel: channelId,
-          user: slackUserId,
-          blocks: errorMessage('Commitment Not Found', 'The commitment was not found on Canton.'),
-        });
+        await notifyUser(app.client, slackUserId, errorMessage('Commitment Not Found', 'The commitment was not found on Canton.'), channelId);
         return;
       }
 
@@ -152,14 +141,10 @@ export function verifyCommand(app: App): void {
       const hashMatches = verifyCommitment(secret, saltEntry.salt, storedHash);
 
       if (!hashMatches) {
-        await app.client.chat.postEphemeral({
-          channel: channelId,
-          user: slackUserId,
-          blocks: errorMessage(
-            'Hash Mismatch',
-            'The secret you entered does not match the committed hash. Make sure you entered the exact same secret.'
-          ),
-        });
+        await notifyUser(app.client, slackUserId, errorMessage(
+          'Hash Mismatch',
+          'The secret you entered does not match the committed hash. Make sure you entered the exact same secret.'
+        ), channelId);
         return;
       }
 
@@ -168,14 +153,10 @@ export function verifyCommand(app: App): void {
       const verifier = getVerifier(serviceName);
 
       if (!verifier) {
-        await app.client.chat.postEphemeral({
-          channel: channelId,
-          user: slackUserId,
-          blocks: errorMessage(
-            'Unknown Service',
-            `No verifier found for \`${serviceName}\`. Available: ${getAvailableServices().join(', ')}`
-          ),
-        });
+        await notifyUser(app.client, slackUserId, errorMessage(
+          'Unknown Service',
+          `No verifier found for \`${serviceName}\`. Available: ${getAvailableServices().join(', ')}`
+        ), channelId);
         return;
       }
 
@@ -205,40 +186,28 @@ export function verifyCommand(app: App): void {
 
       // Step 5: Report to user
       if (result.success) {
-        await app.client.chat.postEphemeral({
-          channel: channelId,
-          user: slackUserId,
-          blocks: [
-            ...successMessage(
-              `${serviceName.toUpperCase()} Verified!`,
-              `*Status:* Passed\n*Account/ID:* \`${result.responseId}\`\n*Permissions:* ${result.permissions.join(', ')}\n*API:* \`${result.apiEndpoint}\``
-            ),
-            divider(),
-            section(
-              `Next: \`/cc-prove ${label} @auditor\` to share this result (not the secret) with someone.`
-            ),
-          ],
-        });
-      } else {
-        await app.client.chat.postEphemeral({
-          channel: channelId,
-          user: slackUserId,
-          blocks: errorMessage(
-            `${serviceName.toUpperCase()} Verification Failed`,
-            `*Error:* ${result.error}\n*API:* \`${result.apiEndpoint}\``
+        await notifyUser(app.client, slackUserId, [
+          ...successMessage(
+            `${serviceName.toUpperCase()} Verified!`,
+            `*Status:* Passed\n*Account/ID:* \`${result.responseId}\`\n*Permissions:* ${result.permissions.join(', ')}\n*API:* \`${result.apiEndpoint}\``
           ),
-        });
+          divider(),
+          section(
+            `Next: \`/cc-prove ${label} @auditor\` to share this result (not the secret) with someone.`
+          ),
+        ], channelId);
+      } else {
+        await notifyUser(app.client, slackUserId, errorMessage(
+          `${serviceName.toUpperCase()} Verification Failed`,
+          `*Error:* ${result.error}\n*API:* \`${result.apiEndpoint}\``
+        ), channelId);
       }
     } catch (err) {
       console.error('Verify error:', err);
-      await app.client.chat.postEphemeral({
-        channel: channelId,
-        user: slackUserId,
-        blocks: errorMessage(
-          'Verification Error',
-          `Error: ${err instanceof Error ? err.message : 'Unknown error'}`
-        ),
-      });
+      await notifyUser(app.client, slackUserId, errorMessage(
+        'Verification Error',
+        `Error: ${err instanceof Error ? err.message : 'Unknown error'}`
+      ), channelId);
     }
   });
 }

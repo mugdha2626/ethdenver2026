@@ -2,9 +2,32 @@
  * Reusable Slack Block Kit builders for ConfidentialConnect
  */
 
-import type { KnownBlock, Block } from '@slack/bolt';
+import type { KnownBlock, Block, App } from '@slack/bolt';
 
 type AnyBlock = KnownBlock | Block;
+
+/**
+ * Safely send a message to a user from a view handler.
+ * Tries chat.postEphemeral in the original channel first,
+ * falls back to a DM if the bot doesn't have channel access.
+ */
+export async function notifyUser(
+  client: App['client'],
+  userId: string,
+  blocks: AnyBlock[],
+  channelId?: string
+): Promise<void> {
+  if (channelId) {
+    try {
+      await client.chat.postEphemeral({ channel: channelId, user: userId, blocks });
+      return;
+    } catch {
+      // Channel not accessible — fall through to DM
+    }
+  }
+  // Fallback: DM the user directly
+  await client.chat.postMessage({ channel: userId, blocks });
+}
 
 /** Build a section block with markdown text */
 export function section(text: string): AnyBlock {

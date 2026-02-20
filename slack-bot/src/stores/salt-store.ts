@@ -53,3 +53,11 @@ export function deleteSalt(ownerParty: string, label: string): void {
     label
   );
 }
+
+/**
+ * Clear all salt entries (e.g., when Canton sandbox is restarted)
+ */
+export function clearAllSalts(): void {
+  const db = getDb();
+  db.prepare('DELETE FROM salt_store').run();
+}
