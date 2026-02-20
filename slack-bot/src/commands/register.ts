@@ -4,7 +4,7 @@
 
 import type { App } from '@slack/bolt';
 import { allocateParty, createContract, getOperatorParty, listParties } from '../services/canton';
-import { savePartyMapping, getPartyBySlackId, clearAllMappings } from '../stores/party-mapping';
+import { savePartyMapping, getPartyBySlackId } from '../stores/party-mapping';
 import { successMessage, errorMessage } from '../utils/slack-blocks';
 
 export function registerCommand(app: App): void {
@@ -80,9 +80,8 @@ export function registerCommand(app: App): void {
           'Welcome to ConfidentialConnect!',
           `Your private Canton identity is ready: \`${cantonParty}\`\n\n` +
             '*What you can do now:*\n' +
-            '> `/cc-commit <label>` - Commit a secret hash (Verify mode)\n' +
-            '> `/cc-send <label> @user` - Send a secret securely (Share mode)\n' +
-            '> `/cc-status` - View your dashboard'
+            '> `/cc-send <label> @user` - Send a secret securely\n' +
+            '> `/cc-inbox` - View secrets shared with you'
         ),
       });
     } catch (err) {

@@ -62,6 +62,17 @@ export function getSlackIdByParty(cantonParty: string): PartyMapping | null {
 }
 
 /**
+ * Look up a party mapping by Slack username
+ */
+export function getPartyByUsername(username: string): PartyMapping | null {
+  const db = getDb();
+  const row = db
+    .prepare('SELECT * FROM party_mapping WHERE LOWER(slack_username) = LOWER(?)')
+    .get(username) as RawRow | undefined;
+  return row ? rowToMapping(row) : null;
+}
+
+/**
  * Get all registered party mappings
  */
 export function getAllMappings(): PartyMapping[] {

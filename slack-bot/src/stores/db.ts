@@ -1,6 +1,6 @@
 /**
  * SQLite database setup using better-sqlite3
- * Stores salts and party mappings locally
+ * Stores party mappings locally
  */
 
 import Database from 'better-sqlite3';
@@ -33,14 +33,6 @@ function initTables(db: Database.Database): void {
       slack_username TEXT NOT NULL,
       canton_party TEXT NOT NULL,
       registered_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS salt_store (
-      owner_party TEXT NOT NULL,
-      label TEXT NOT NULL,
-      salt TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      PRIMARY KEY (owner_party, label)
     );
   `);
 }

@@ -32,11 +32,3 @@ export function generateJwt(party: string): string {
     expiresIn: '24h',
   });
 }
-
-/**
- * Generate a JWT with actAs rights for multiple parties
- * Used when the bot needs to act on behalf of the operator
- */
-export function generateOperatorJwt(): string {
-  return generateJwt(process.env.CANTON_OPERATOR_PARTY || 'operator');
-}

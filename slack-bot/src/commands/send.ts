@@ -5,7 +5,7 @@
 
 import type { App } from '@slack/bolt';
 import { createContract, getOperatorParty } from '../services/canton';
-import { getPartyBySlackId } from '../stores/party-mapping';
+import { getPartyBySlackId, getPartyByUsername } from '../stores/party-mapping';
 import { successMessage, errorMessage, notifyUser } from '../utils/slack-blocks';
 
 export function sendCommand(app: App): void {
@@ -38,47 +38,29 @@ export function sendCommand(app: App): void {
     // Join remaining parts as the user mention (handles names with spaces)
     const userMention = parts.slice(1).join(' ');
 
-    // Try <@USERID> format first (proper Slack mention)
+    // Parse recipient: try <@USERID> format first, then fall back to username lookup
     let recipientSlackId: string | null = null;
+    let recipientMapping = null;
+
     const recipientMatch = userMention.match(/<@(\w+)(?:\|[^>]+)?>/);
     if (recipientMatch) {
       recipientSlackId = recipientMatch[1];
+      recipientMapping = getPartyBySlackId(recipientSlackId);
     } else {
-      // Fall back: search for user by name/display name
+      // Slack slash commands often pass @user as plain text — look up by username
       const cleanName = userMention.replace(/^@/, '').trim();
-      try {
-        const usersRes = await client.users.list({});
-        const found = usersRes.members?.find(
-          (m) =>
-            m.name?.toLowerCase() === cleanName.toLowerCase() ||
-            m.real_name?.toLowerCase() === cleanName.toLowerCase() ||
-            m.profile?.display_name?.toLowerCase() === cleanName.toLowerCase()
-        );
-        if (found?.id) {
-          recipientSlackId = found.id;
-        }
-      } catch {
-        // users.list failed
+      recipientMapping = getPartyByUsername(cleanName);
+      if (recipientMapping) {
+        recipientSlackId = recipientMapping.slackUserId;
       }
     }
 
-    if (!recipientSlackId) {
+    if (!recipientSlackId || !recipientMapping) {
       await respond({
         response_type: 'ephemeral',
         blocks: errorMessage(
-          'User Not Found',
-          `Could not find user "${userMention}". Try mentioning them with @ or check the spelling.`
-        ),
-      });
-      return;
-    }
-    const recipientMapping = getPartyBySlackId(recipientSlackId);
-    if (!recipientMapping) {
-      await respond({
-        response_type: 'ephemeral',
-        blocks: errorMessage(
-          'Recipient Not Registered',
-          `<@${recipientSlackId}> hasn't registered yet. Ask them to run \`/cc-register\` first.`
+          'Recipient Not Found',
+          `Could not find a registered user for "${userMention}". Make sure they've run \`/cc-register\` first.`
         ),
       });
       return;

@@ -8,22 +8,11 @@ import path from 'path';
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 import { App, LogLevel } from '@slack/bolt';
 import { registerCommand } from './commands/register';
-import { commitCommand } from './commands/commit';
-import { verifyCommand } from './commands/verify';
-import { proveCommand } from './commands/prove';
 import { sendCommand } from './commands/send';
 import { inboxCommand } from './commands/inbox';
-import { auditCommand } from './commands/audit';
-import { statusCommand } from './commands/status';
 import { closeDb } from './stores/db';
 import { clearAllMappings, getAllMappings } from './stores/party-mapping';
-import { clearAllSalts } from './stores/salt-store';
 import { discoverPackageId, allocateParty, setOperatorParty, listParties } from './services/canton';
-
-// Load verifiers (side-effect: registers them)
-import './services/verifiers/aws';
-import './services/verifiers/stripe';
-import './services/verifiers/github';
 
 // Validate required environment variables
 const requiredEnvVars = ['SLACK_BOT_TOKEN', 'SLACK_APP_TOKEN'];
@@ -49,13 +38,8 @@ app.error(async (error) => {
 
 // Register all commands
 registerCommand(app);   // /cc-register
-commitCommand(app);     // /cc-commit
-verifyCommand(app);     // /cc-verify
-proveCommand(app);      // /cc-prove
 sendCommand(app);       // /cc-send
 inboxCommand(app);      // /cc-inbox
-auditCommand(app);      // /cc-audit
-statusCommand(app);     // /cc-status
 
 // Health check / startup
 async function start(): Promise<void> {
@@ -91,7 +75,6 @@ async function start(): Promise<void> {
     if (!anyValid) {
       console.log('  Detected fresh Canton sandbox — clearing stale local data...');
       clearAllMappings();
-      clearAllSalts();
     }
   }
 
@@ -105,13 +88,8 @@ async function start(): Promise<void> {
   console.log('  ║                                                  ║');
   console.log('  ║  Commands:                                       ║');
   console.log('  ║    /cc-register  - Register Canton identity      ║');
-  console.log('  ║    /cc-commit    - Commit secret hash            ║');
-  console.log('  ║    /cc-verify    - Live-verify via API           ║');
-  console.log('  ║    /cc-prove     - Share proof with auditor      ║');
   console.log('  ║    /cc-send      - Send secret to someone        ║');
   console.log('  ║    /cc-inbox     - View received secrets         ║');
-  console.log('  ║    /cc-audit     - Auditor dashboard             ║');
-  console.log('  ║    /cc-status    - Your overview                 ║');
   console.log('  ╚══════════════════════════════════════════════════╝');
   console.log('');
 }
