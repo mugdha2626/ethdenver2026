@@ -3,11 +3,9 @@
  */
 
 import type { App } from '@slack/bolt';
-import { allocateParty, createContract } from '../services/canton';
+import { allocateParty, createContract, getOperatorParty, listParties } from '../services/canton';
 import { savePartyMapping, getPartyBySlackId } from '../stores/party-mapping';
 import { successMessage, errorMessage } from '../utils/slack-blocks';
-
-const OPERATOR_PARTY = process.env.CANTON_OPERATOR_PARTY || 'operator';
 
 export function registerCommand(app: App): void {
   app.command('/cc-register', async ({ command, ack, respond }) => {
@@ -30,13 +28,32 @@ export function registerCommand(app: App): void {
         return;
       }
 
-      // Allocate a new Canton party
+      // Allocate a new Canton party (or reuse if already allocated on ledger)
       const partyHint = `user-${slackUserId}`;
-      const cantonParty = await allocateParty(partyHint, slackUsername);
+      let cantonParty: string;
+      try {
+        cantonParty = await allocateParty(partyHint, slackUsername);
+      } catch (err) {
+        // Party already exists on Canton (e.g., from a previous attempt)
+        // Extract the party identifier from the error or construct it
+        if (err instanceof Error && err.message.includes('already allocated')) {
+          // Use the party hint format that Canton would have assigned
+          // Query parties list to find the exact identifier
+          const parties = await listParties();
+          const found = parties.find((p) => p.startsWith(partyHint));
+          if (found) {
+            cantonParty = found;
+          } else {
+            throw err;
+          }
+        } else {
+          throw err;
+        }
+      }
 
       // Create UserIdentity contract on Canton
-      await createContract(OPERATOR_PARTY, 'UserIdentity', {
-        operator: OPERATOR_PARTY,
+      await createContract(getOperatorParty(), 'UserIdentity', {
+        operator: getOperatorParty(),
         user: cantonParty,
         slackUserId,
         slackUsername,

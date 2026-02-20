@@ -4,11 +4,9 @@
  */
 
 import type { App } from '@slack/bolt';
-import { createContract } from '../services/canton';
+import { createContract, getOperatorParty } from '../services/canton';
 import { getPartyBySlackId } from '../stores/party-mapping';
 import { successMessage, errorMessage } from '../utils/slack-blocks';
-
-const OPERATOR_PARTY = process.env.CANTON_OPERATOR_PARTY || 'operator';
 
 export function sendCommand(app: App): void {
   app.command('/cc-send', async ({ command, ack, client, respond }) => {
@@ -37,20 +35,43 @@ export function sendCommand(app: App): void {
     }
 
     const label = parts[0];
-    const userMention = parts[1];
+    // Join remaining parts as the user mention (handles names with spaces)
+    const userMention = parts.slice(1).join(' ');
+
+    // Try <@USERID> format first (proper Slack mention)
+    let recipientSlackId: string | null = null;
     const recipientMatch = userMention.match(/<@(\w+)(?:\|[^>]+)?>/);
-    if (!recipientMatch) {
+    if (recipientMatch) {
+      recipientSlackId = recipientMatch[1];
+    } else {
+      // Fall back: search for user by name/display name
+      const cleanName = userMention.replace(/^@/, '').trim();
+      try {
+        const usersRes = await client.users.list({});
+        const found = usersRes.members?.find(
+          (m) =>
+            m.name?.toLowerCase() === cleanName.toLowerCase() ||
+            m.real_name?.toLowerCase() === cleanName.toLowerCase() ||
+            m.profile?.display_name?.toLowerCase() === cleanName.toLowerCase()
+        );
+        if (found?.id) {
+          recipientSlackId = found.id;
+        }
+      } catch {
+        // users.list failed
+      }
+    }
+
+    if (!recipientSlackId) {
       await respond({
         response_type: 'ephemeral',
         blocks: errorMessage(
-          'Invalid User',
-          'Please mention a user with @. Example: `/cc-send aws @bob`'
+          'User Not Found',
+          `Could not find user "${userMention}". Try mentioning them with @ or check the spelling.`
         ),
       });
       return;
     }
-
-    const recipientSlackId = recipientMatch[1];
     const recipientMapping = getPartyBySlackId(recipientSlackId);
     if (!recipientMapping) {
       await respond({
@@ -137,7 +158,7 @@ export function sendCommand(app: App): void {
       await createContract(mapping.cantonParty, 'SecretTransfer', {
         sender: mapping.cantonParty,
         recipient: recipientParty,
-        operator: OPERATOR_PARTY,
+        operator: getOperatorParty(),
         label,
         encryptedSecret: secret,
         description,

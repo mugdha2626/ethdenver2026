@@ -4,13 +4,11 @@
  */
 
 import type { App } from '@slack/bolt';
-import { createContract, fetchByKey } from '../services/canton';
+import { createContract, fetchByKey, getOperatorParty } from '../services/canton';
 import { generateSalt, computeCommitment } from '../services/crypto';
 import { saveSalt } from '../stores/salt-store';
 import { getPartyBySlackId } from '../stores/party-mapping';
 import { successMessage, errorMessage } from '../utils/slack-blocks';
-
-const OPERATOR_PARTY = process.env.CANTON_OPERATOR_PARTY || 'operator';
 
 export function commitCommand(app: App): void {
   // Handle the slash command - opens a modal
@@ -114,7 +112,7 @@ export function commitCommand(app: App): void {
       // Create SecretCommitment on Canton
       await createContract(mapping.cantonParty, 'SecretCommitment', {
         owner: mapping.cantonParty,
-        operator: OPERATOR_PARTY,
+        operator: getOperatorParty(),
         label,
         commitment,
         committedAt: new Date().toISOString(),

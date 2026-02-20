@@ -4,14 +4,12 @@
  */
 
 import type { App } from '@slack/bolt';
-import { fetchByKey, exerciseChoice } from '../services/canton';
+import { fetchByKey, exerciseChoice, getOperatorParty } from '../services/canton';
 import { verifyCommitment } from '../services/crypto';
 import { getSalt } from '../stores/salt-store';
 import { getPartyBySlackId } from '../stores/party-mapping';
 import { getVerifier, getAvailableServices, detectService } from '../services/verifiers';
 import { successMessage, errorMessage, section, context, divider } from '../utils/slack-blocks';
-
-const OPERATOR_PARTY = process.env.CANTON_OPERATOR_PARTY || 'operator';
 
 export function verifyCommand(app: App): void {
   app.command('/cc-verify', async ({ command, ack, client }) => {
@@ -189,7 +187,7 @@ export function verifyCommand(app: App): void {
       // Step 4: Record result on Canton
       const status = result.success ? 'Passed' : 'Failed';
       await exerciseChoice(
-        OPERATOR_PARTY,
+        getOperatorParty(),
         'SecretCommitment',
         contractId,
         'RecordVerification',

@@ -3,7 +3,9 @@
  * A privacy black box powered by Canton + Slack
  */
 
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import path from 'path';
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 import { App, LogLevel } from '@slack/bolt';
 import { registerCommand } from './commands/register';
 import { commitCommand } from './commands/commit';
@@ -14,6 +16,7 @@ import { inboxCommand } from './commands/inbox';
 import { auditCommand } from './commands/audit';
 import { statusCommand } from './commands/status';
 import { closeDb } from './stores/db';
+import { discoverPackageId, allocateParty, setOperatorParty } from './services/canton';
 
 // Load verifiers (side-effect: registers them)
 import './services/verifiers/aws';
@@ -49,6 +52,29 @@ statusCommand(app);     // /cc-status
 
 // Health check / startup
 async function start(): Promise<void> {
+  // Bootstrap Canton: allocate operator party + discover package ID
+  console.log('  Connecting to Canton...');
+  try {
+    const operatorId = await allocateParty('operator', 'Operator');
+    setOperatorParty(operatorId);
+    console.log(`  Operator party: ${operatorId.substring(0, 30)}...`);
+  } catch (err) {
+    // Already allocated — find it
+    if (err instanceof Error && err.message.includes('already allocated')) {
+      const { listParties } = await import('./services/canton');
+      const parties = await listParties();
+      const op = parties.find((p) => p.startsWith('operator'));
+      if (op) {
+        setOperatorParty(op);
+        console.log(`  Operator party (existing): ${op.substring(0, 30)}...`);
+      } else {
+        throw new Error('Could not find operator party');
+      }
+    } else {
+      throw err;
+    }
+  }
+  await discoverPackageId();
   await app.start();
   console.log('');
   console.log('  ╔══════════════════════════════════════════════════╗');

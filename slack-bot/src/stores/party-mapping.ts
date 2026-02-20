@@ -12,6 +12,22 @@ export interface PartyMapping {
   registeredAt: string;
 }
 
+interface RawRow {
+  slack_user_id: string;
+  slack_username: string;
+  canton_party: string;
+  registered_at: string;
+}
+
+function rowToMapping(row: RawRow): PartyMapping {
+  return {
+    slackUserId: row.slack_user_id,
+    slackUsername: row.slack_username,
+    cantonParty: row.canton_party,
+    registeredAt: row.registered_at,
+  };
+}
+
 /**
  * Save a new party mapping
  */
@@ -30,8 +46,8 @@ export function getPartyBySlackId(slackUserId: string): PartyMapping | null {
   const db = getDb();
   const row = db
     .prepare('SELECT * FROM party_mapping WHERE slack_user_id = ?')
-    .get(slackUserId) as PartyMapping | undefined;
-  return row ?? null;
+    .get(slackUserId) as RawRow | undefined;
+  return row ? rowToMapping(row) : null;
 }
 
 /**
@@ -41,8 +57,8 @@ export function getSlackIdByParty(cantonParty: string): PartyMapping | null {
   const db = getDb();
   const row = db
     .prepare('SELECT * FROM party_mapping WHERE canton_party = ?')
-    .get(cantonParty) as PartyMapping | undefined;
-  return row ?? null;
+    .get(cantonParty) as RawRow | undefined;
+  return row ? rowToMapping(row) : null;
 }
 
 /**
@@ -50,5 +66,6 @@ export function getSlackIdByParty(cantonParty: string): PartyMapping | null {
  */
 export function getAllMappings(): PartyMapping[] {
   const db = getDb();
-  return db.prepare('SELECT * FROM party_mapping').all() as PartyMapping[];
+  const rows = db.prepare('SELECT * FROM party_mapping').all() as RawRow[];
+  return rows.map(rowToMapping);
 }

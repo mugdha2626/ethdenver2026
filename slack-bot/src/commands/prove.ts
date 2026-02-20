@@ -4,11 +4,9 @@
  */
 
 import type { App } from '@slack/bolt';
-import { fetchByKey, exerciseChoice } from '../services/canton';
+import { fetchByKey, exerciseChoice, getOperatorParty } from '../services/canton';
 import { getPartyBySlackId } from '../stores/party-mapping';
 import { successMessage, errorMessage } from '../utils/slack-blocks';
-
-const OPERATOR_PARTY = process.env.CANTON_OPERATOR_PARTY || 'operator';
 
 export function proveCommand(app: App): void {
   app.command('/cc-prove', async ({ command, ack, client, respond }) => {
@@ -37,22 +35,45 @@ export function proveCommand(app: App): void {
     }
 
     const label = parts[0];
-    // Extract user mention - Slack sends <@U01ABC123|username> format
     const userMention = parts[1];
+
+    // Try <@USERID> format first
+    let recipientSlackId: string | null = null;
+    let purposeStartIdx = 2;
     const recipientMatch = userMention.match(/<@(\w+)(?:\|[^>]+)?>/);
-    if (!recipientMatch) {
+    if (recipientMatch) {
+      recipientSlackId = recipientMatch[1];
+    } else {
+      // Fall back: search by name
+      const cleanName = userMention.replace(/^@/, '').trim();
+      try {
+        const usersRes = await client.users.list({});
+        const found = usersRes.members?.find(
+          (m) =>
+            m.name?.toLowerCase() === cleanName.toLowerCase() ||
+            m.real_name?.toLowerCase() === cleanName.toLowerCase() ||
+            m.profile?.display_name?.toLowerCase() === cleanName.toLowerCase()
+        );
+        if (found?.id) {
+          recipientSlackId = found.id;
+        }
+      } catch {
+        // users.list failed
+      }
+    }
+
+    if (!recipientSlackId) {
       await respond({
         response_type: 'ephemeral',
         blocks: errorMessage(
-          'Invalid User',
-          'Please mention a user with @. Example: `/cc-prove aws @bob`'
+          'User Not Found',
+          `Could not find user "${userMention}". Try mentioning them with @ or check the spelling.`
         ),
       });
       return;
     }
 
-    const recipientSlackId = recipientMatch[1];
-    const purpose = parts.slice(2).join(' ') || 'Shared verification proof';
+    const purpose = parts.slice(purposeStartIdx).join(' ') || 'Shared verification proof';
 
     // Check recipient is registered
     const recipientMapping = getPartyBySlackId(recipientSlackId);
@@ -70,7 +91,7 @@ export function proveCommand(app: App): void {
     try {
       // Find the verification result
       const verResult = await fetchByKey(mapping.cantonParty, 'VerificationResult', [
-        OPERATOR_PARTY,
+        getOperatorParty(),
         mapping.cantonParty,
         label,
       ]);

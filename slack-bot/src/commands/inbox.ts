@@ -88,7 +88,7 @@ export function inboxCommand(app: App): void {
   });
 
   // Handle Acknowledge button
-  app.action('acknowledge_transfer', async ({ ack, body, client }) => {
+  app.action('acknowledge_transfer', async ({ ack, body, respond }) => {
     await ack();
 
     if (body.type !== 'block_actions' || !body.actions[0]) return;
@@ -110,17 +110,31 @@ export function inboxCommand(app: App): void {
         {}
       );
 
-      // Update the message to show acknowledgment
-      await client.chat.postEphemeral({
-        channel: body.channel?.id || slackUserId,
-        user: slackUserId,
-        text: 'Secret acknowledged and archived! The secret has been removed from Canton. Only you have it now.',
+      // Replace the original message — removes the secret from screen
+      await respond({
+        replace_original: true,
+        text: 'Secret acknowledged and archived!',
+        blocks: [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: '*Secret acknowledged and archived!*\n\nThe Canton contract has been archived. The secret no longer exists on the ledger.\n\nOnly you have it now. No Slack logs. No Canton record. Gone.',
+            },
+          },
+          {
+            type: 'context',
+            elements: [
+              { type: 'mrkdwn', text: `Archived at ${new Date().toISOString()}` },
+              { type: 'mrkdwn', text: 'Powered by Canton sub-transaction privacy' },
+            ],
+          },
+        ],
       });
     } catch (err) {
       console.error('Acknowledge error:', err);
-      await client.chat.postEphemeral({
-        channel: body.channel?.id || slackUserId,
-        user: slackUserId,
+      await respond({
+        replace_original: false,
         text: `Error acknowledging: ${err instanceof Error ? err.message : 'Unknown error'}`,
       });
     }
