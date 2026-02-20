@@ -1,7 +1,10 @@
 /**
  * JWT generation for Canton JSON API authentication
- * Canton sandbox with --allow-insecure-tokens accepts any JWT
- * with the right structure. No signing key needed for dev.
+ *
+ * v1 (sandbox): Party-specific JWTs with Daml ledger claims
+ * v2 (DevNet):  Admin JWT with participant_admin subject
+ *
+ * Set CANTON_AUTH_TOKEN to use a pre-issued token (skips generation).
  */
 
 import jwt from 'jsonwebtoken';
@@ -9,22 +12,34 @@ import jwt from 'jsonwebtoken';
 const JWT_SECRET = process.env.JWT_SECRET || 'sandbox-secret';
 
 /**
- * Generate a JWT token for Canton JSON API
- * The token includes actAs and readAs claims for the given party
+ * Generate a JWT token for Canton JSON API v1
+ * Includes actAs/readAs claims scoped to a specific party
  */
 export function generateJwt(party: string): string {
-  // Canton JSON API expects this specific payload structure
-  // See: https://docs.daml.com/json-api/index.html#auth
   const payload = {
-    // Standard JWT claims
     sub: party,
-    // Daml-specific claims
     'https://daml.com/ledger-api': {
       ledgerId: 'sandbox',
       applicationId: 'confidential-connect',
       actAs: [party],
       readAs: [party],
     },
+  };
+
+  return jwt.sign(payload, JWT_SECRET, {
+    algorithm: 'HS256',
+    expiresIn: '24h',
+  });
+}
+
+/**
+ * Generate an admin JWT token for Canton v2 API
+ * v2 specifies actAs/readAs per-request, so the JWT only authenticates the app
+ */
+export function generateAdminToken(): string {
+  const payload = {
+    sub: 'participant_admin',
+    scope: 'daml_ledger_api',
   };
 
   return jwt.sign(payload, JWT_SECRET, {

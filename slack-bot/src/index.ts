@@ -44,15 +44,19 @@ inboxCommand(app);      // /cc-inbox
 // Health check / startup
 async function start(): Promise<void> {
   // Bootstrap Canton: allocate operator party + discover package ID
-  console.log('  Connecting to Canton...');
+  console.log(`  Connecting to Canton (${process.env.CANTON_API_VERSION || 'v1'} API)...`);
   try {
     const operatorId = await allocateParty('operator', 'Operator');
     setOperatorParty(operatorId);
     console.log(`  Operator party: ${operatorId.substring(0, 30)}...`);
   } catch (err) {
-    // Already allocated — find it
-    if (err instanceof Error && err.message.includes('already allocated')) {
-      const { listParties } = await import('./services/canton');
+    // Already allocated — find it in the party list
+    const errMsg = err instanceof Error ? err.message : String(err);
+    if (
+      errMsg.includes('already allocated') ||
+      errMsg.includes('ALREADY_EXISTS') ||
+      errMsg.includes('already exists')
+    ) {
       const parties = await listParties();
       const op = parties.find((p) => p.startsWith('operator'));
       if (op) {
@@ -80,11 +84,13 @@ async function start(): Promise<void> {
 
   await app.start();
   console.log('');
+  const apiVer = process.env.CANTON_API_VERSION || 'v1';
+  const apiUrl = process.env.CANTON_JSON_API_URL || 'http://localhost:7575';
   console.log('  ╔══════════════════════════════════════════════════╗');
   console.log('  ║        ConfidentialConnect is running!           ║');
   console.log('  ║                                                  ║');
   console.log('  ║  Slack Bot:  Connected (Socket Mode)             ║');
-  console.log(`  ║  Canton API: ${process.env.CANTON_JSON_API_URL || 'http://localhost:7575'}        ║`);
+  console.log(`  ║  Canton API: ${apiUrl} (${apiVer})`.padEnd(55) + '║');
   console.log('  ║                                                  ║');
   console.log('  ║  Commands:                                       ║');
   console.log('  ║    /cc-register  - Register Canton identity      ║');
