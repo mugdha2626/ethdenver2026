@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'">
+        content="default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self'">
   <meta name="robots" content="noindex, nofollow">
   <title>ConfidentialConnect — Secret</title>
   <style>
@@ -183,9 +183,12 @@
     <p id="error-message"></p>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/node-forge@1.3.1/dist/forge.min.js"></script>
   <script>
     (function() {
       'use strict';
+
+      var useWebCrypto = !!(crypto && crypto.subtle);
 
       // --- Parse parameters from URL fragment ---
       var hash = window.location.hash.substring(1);
@@ -314,6 +317,38 @@
         return arr;
       }
 
+      // --- Forge-based decryption for non-secure contexts ---
+
+      function forgeDecryptEnvelope(envelope, pemPrivateKey) {
+        var forgeKey = forge.pki.privateKeyFromPem(pemPrivateKey);
+
+        // RSA-OAEP decrypt the AES key
+        var encryptedAesKeyBytes = forge.util.decode64(envelope.k);
+        var rawAesKey = forgeKey.decrypt(encryptedAesKeyBytes, 'RSA-OAEP', {
+          md: forge.md.sha256.create(),
+          mgf1: { md: forge.md.sha256.create() }
+        });
+
+        // AES-GCM decrypt
+        var cBytes = forge.util.decode64(envelope.c);
+        var tBytes = forge.util.decode64(envelope.t);
+        var ivBytes = forge.util.decode64(envelope.iv);
+
+        var decipher = forge.cipher.createDecipher('AES-GCM', rawAesKey);
+        decipher.start({
+          iv: ivBytes,
+          tag: forge.util.createBuffer(tBytes),
+          tagLength: 128
+        });
+        decipher.update(forge.util.createBuffer(cBytes));
+        var pass = decipher.finish();
+        if (!pass) throw new Error('AES-GCM auth tag mismatch — decryption failed');
+
+        return decipher.output.toString('utf8');
+      }
+
+      // ---------------------------------------------------------------
+
       async function decryptSecret(encryptedSecretB64, partyId) {
         // Try to parse as encrypted envelope
         var envelopeJson;
@@ -344,7 +379,14 @@
           throw { type: 'nokeys', message: 'Encryption keys not found. Open this link on the device/browser where you registered and set up your keys.' };
         }
 
-        // RSA-OAEP decrypt the AES key
+        // Detect key type: PEM string (forge) vs CryptoKey (Web Crypto)
+        if (typeof privateKey === 'string') {
+          // Forge path — key was generated via forge on HTTP
+          var plaintext = forgeDecryptEnvelope(envelope, privateKey);
+          return { plaintext: plaintext, encrypted: true };
+        }
+
+        // Web Crypto path — key is a CryptoKey object
         var encryptedAesKey = b64ToBytes(envelope.k);
         var rawAesKey = await crypto.subtle.decrypt(
           { name: 'RSA-OAEP' }, privateKey, encryptedAesKey

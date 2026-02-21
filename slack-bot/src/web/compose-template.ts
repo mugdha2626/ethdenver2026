@@ -124,16 +124,56 @@ export function renderComposePage(
     <p class="privacy-note">Your secret is encrypted in your browser using the recipient's public key.<br>Neither Slack, our servers, nor Canton ever see the plaintext.</p>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/node-forge@1.3.1/dist/forge.min.js"></script>
   <script>
     (function() {
       'use strict';
 
       var TOKEN = ${JSON.stringify(safeToken)};
       var RECIPIENT_PARTY = ${JSON.stringify(safeRecipientParty)};
+      var useWebCrypto = !!(crypto && crypto.subtle);
 
       function setStatus(html) {
         document.getElementById('status').innerHTML = html;
       }
+
+      // --- Forge-based encryption helpers for non-secure contexts ---
+
+      function forgeImportSpki(spkiBase64) {
+        var der = forge.util.decode64(spkiBase64);
+        var asn1 = forge.asn1.fromDer(der);
+        return forge.pki.publicKeyFromAsn1(asn1);
+      }
+
+      function forgeEncrypt(secret, recipientPubKey) {
+        // Generate random AES-256 key and IV
+        var rawAesKey = forge.random.getBytesSync(32);
+        var iv = forge.random.getBytesSync(12);
+
+        // AES-GCM encrypt the secret
+        var cipher = forge.cipher.createCipher('AES-GCM', rawAesKey);
+        cipher.start({ iv: iv, tagLength: 128 });
+        cipher.update(forge.util.createBuffer(secret, 'utf8'));
+        cipher.finish();
+        var c = cipher.output.getBytes();
+        var t = cipher.mode.tag.getBytes();
+
+        // RSA-OAEP encrypt the AES key
+        var encryptedAesKey = recipientPubKey.encrypt(rawAesKey, 'RSA-OAEP', {
+          md: forge.md.sha256.create(),
+          mgf1: { md: forge.md.sha256.create() }
+        });
+
+        return {
+          v: 1,
+          k: forge.util.encode64(encryptedAesKey),
+          iv: forge.util.encode64(iv),
+          t: forge.util.encode64(t),
+          c: forge.util.encode64(c)
+        };
+      }
+
+      // -----------------------------------------------------------------
 
       window.encryptAndSend = async function() {
         var btn = document.getElementById('send-btn');
@@ -160,55 +200,58 @@ export function renderComposePage(
           var keyData = await keyRes.json();
           var spkiBase64 = keyData.publicKeySpki;
 
-          // 2. Import recipient's RSA-OAEP public key
-          var spkiBytes = Uint8Array.from(atob(spkiBase64), function(c) { return c.charCodeAt(0); });
-          var recipientPubKey = await crypto.subtle.importKey(
-            'spki', spkiBytes.buffer,
-            { name: 'RSA-OAEP', hash: 'SHA-256' },
-            false, ['encrypt']
-          );
-
           setStatus('<span class="spinner"></span> Encrypting secret...');
 
-          // 3. Hybrid encryption
-          // Generate random AES-256 key and IV
-          var rawAesKey = crypto.getRandomValues(new Uint8Array(32));
-          var iv = crypto.getRandomValues(new Uint8Array(12));
+          var envelope;
 
-          // Import AES key
-          var aesKey = await crypto.subtle.importKey(
-            'raw', rawAesKey, { name: 'AES-GCM' }, false, ['encrypt']
-          );
+          if (useWebCrypto) {
+            // --- Native Web Crypto path ---
+            var spkiBytes = Uint8Array.from(atob(spkiBase64), function(c) { return c.charCodeAt(0); });
+            var recipientPubKey = await crypto.subtle.importKey(
+              'spki', spkiBytes.buffer,
+              { name: 'RSA-OAEP', hash: 'SHA-256' },
+              false, ['encrypt']
+            );
 
-          // AES-GCM encrypt the secret
-          var plainBytes = new TextEncoder().encode(secret);
-          var aesCiphertext = await crypto.subtle.encrypt(
-            { name: 'AES-GCM', iv: iv, tagLength: 128 },
-            aesKey, plainBytes
-          );
-          // Web Crypto AES-GCM: ciphertext has authTag appended (last 16 bytes)
-          var fullCipher = new Uint8Array(aesCiphertext);
-          var c = fullCipher.slice(0, fullCipher.length - 16);
-          var t = fullCipher.slice(fullCipher.length - 16);
+            var rawAesKey = crypto.getRandomValues(new Uint8Array(32));
+            var iv = crypto.getRandomValues(new Uint8Array(12));
 
-          // RSA-OAEP encrypt the AES key
-          var encryptedAesKey = await crypto.subtle.encrypt(
-            { name: 'RSA-OAEP' }, recipientPubKey, rawAesKey
-          );
+            var aesKey = await crypto.subtle.importKey(
+              'raw', rawAesKey, { name: 'AES-GCM' }, false, ['encrypt']
+            );
 
-          // 4. Build ciphertext envelope
-          var envelope = {
-            v: 1,
-            k: btoa(String.fromCharCode.apply(null, new Uint8Array(encryptedAesKey))),
-            iv: btoa(String.fromCharCode.apply(null, iv)),
-            t: btoa(String.fromCharCode.apply(null, t)),
-            c: btoa(String.fromCharCode.apply(null, c))
-          };
+            var plainBytes = new TextEncoder().encode(secret);
+            var aesCiphertext = await crypto.subtle.encrypt(
+              { name: 'AES-GCM', iv: iv, tagLength: 128 },
+              aesKey, plainBytes
+            );
+
+            var fullCipher = new Uint8Array(aesCiphertext);
+            var c = fullCipher.slice(0, fullCipher.length - 16);
+            var t = fullCipher.slice(fullCipher.length - 16);
+
+            var encryptedAesKey = await crypto.subtle.encrypt(
+              { name: 'RSA-OAEP' }, recipientPubKey, rawAesKey
+            );
+
+            envelope = {
+              v: 1,
+              k: btoa(String.fromCharCode.apply(null, new Uint8Array(encryptedAesKey))),
+              iv: btoa(String.fromCharCode.apply(null, iv)),
+              t: btoa(String.fromCharCode.apply(null, t)),
+              c: btoa(String.fromCharCode.apply(null, c))
+            };
+          } else {
+            // --- Forge fallback path (HTTP over LAN) ---
+            var forgePubKey = forgeImportSpki(spkiBase64);
+            envelope = forgeEncrypt(secret, forgePubKey);
+          }
+
           var ciphertextB64 = btoa(JSON.stringify(envelope));
 
           setStatus('<span class="spinner"></span> Sending encrypted secret...');
 
-          // 5. POST ciphertext to server
+          // POST ciphertext to server
           var sendRes = await fetch('/api/send/' + encodeURIComponent(TOKEN), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

@@ -84,6 +84,7 @@ export function renderSetupKeysPage(party: string, uid: string): string {
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/node-forge@1.3.1/dist/forge.min.js"></script>
   <script>
     (function() {
       'use strict';
@@ -92,6 +93,7 @@ export function renderSetupKeysPage(party: string, uid: string): string {
       var UID = ${JSON.stringify(safeUid)};
       var DB_NAME = 'cc-encryption-keys';
       var STORE_NAME = 'private-keys';
+      var useWebCrypto = !!(crypto && crypto.subtle);
 
       function setStatus(html, showSpinner) {
         document.getElementById('status-text').innerHTML = html;
@@ -132,6 +134,34 @@ export function renderSetupKeysPage(party: string, uid: string): string {
         });
       }
 
+      // --- Forge-based fallback for non-secure contexts (HTTP over LAN) ---
+
+      function forgeGenerateKeyPair() {
+        return new Promise(function(resolve, reject) {
+          // Use setTimeout to let the UI render the spinner before blocking
+          setTimeout(function() {
+            try {
+              var keypair = forge.pki.rsa.generateKeyPair({ bits: 2048, e: 0x10001 });
+              resolve(keypair);
+            } catch (err) {
+              reject(err);
+            }
+          }, 50);
+        });
+      }
+
+      function forgePublicKeyToSpkiBase64(publicKey) {
+        var asn1 = forge.pki.publicKeyToAsn1(publicKey);
+        var der = forge.asn1.toDer(asn1).getBytes();
+        return forge.util.encode64(der);
+      }
+
+      function forgePrivateKeyToPem(privateKey) {
+        return forge.pki.privateKeyToPem(privateKey);
+      }
+
+      // -------------------------------------------------------------------
+
       window.generateKeys = async function() {
         var btn = document.getElementById('generate-btn');
         btn.disabled = true;
@@ -148,29 +178,44 @@ export function renderSetupKeysPage(party: string, uid: string): string {
             return;
           }
 
-          setStatus('<div class="spinner"></div><br>Generating RSA-OAEP 2048-bit keypair...', true);
+          var spkiBase64;
+          var privateKeyToStore;
 
-          // Generate RSA-OAEP 2048 keypair
-          var keyPair = await crypto.subtle.generateKey(
-            { name: 'RSA-OAEP', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
-            false, // non-extractable private key
-            ['encrypt', 'decrypt']
-          );
+          if (useWebCrypto) {
+            // --- Native Web Crypto path (HTTPS / localhost) ---
+            setStatus('<div class="spinner"></div><br>Generating RSA-OAEP 2048-bit keypair...', true);
 
-          setStatus('<div class="spinner"></div><br>Exporting public key...', true);
+            var keyPair = await crypto.subtle.generateKey(
+              { name: 'RSA-OAEP', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
+              false,
+              ['encrypt', 'decrypt']
+            );
 
-          // Export public key as SPKI
-          var spkiBuffer = await crypto.subtle.exportKey('spki', keyPair.publicKey);
-          var spkiBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(spkiBuffer)));
+            setStatus('<div class="spinner"></div><br>Exporting public key...', true);
+
+            var spkiBuffer = await crypto.subtle.exportKey('spki', keyPair.publicKey);
+            spkiBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(spkiBuffer)));
+            privateKeyToStore = keyPair.privateKey;
+
+          } else {
+            // --- Forge fallback path (HTTP over LAN) ---
+            setStatus('<div class="spinner"></div><br>Generating RSA 2048-bit keypair (this may take a few seconds)...', true);
+
+            var forgeKeyPair = await forgeGenerateKeyPair();
+
+            setStatus('<div class="spinner"></div><br>Exporting public key...', true);
+
+            spkiBase64 = forgePublicKeyToSpkiBase64(forgeKeyPair.publicKey);
+            // Store private key as PEM string (forge keys aren't CryptoKey objects)
+            privateKeyToStore = forgePrivateKeyToPem(forgeKeyPair.privateKey);
+          }
 
           setStatus('<div class="spinner"></div><br>Saving private key to browser...', true);
 
-          // Store private key in IndexedDB (non-extractable CryptoKey object)
-          await storePrivateKey(db, keyPair.privateKey);
+          await storePrivateKey(db, privateKeyToStore);
 
           setStatus('<div class="spinner"></div><br>Uploading public key to server...', true);
 
-          // POST public key to Express
           var response = await fetch('/api/keys', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
