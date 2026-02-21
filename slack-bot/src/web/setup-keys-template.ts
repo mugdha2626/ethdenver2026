@@ -326,7 +326,7 @@ export function renderSetupKeysPage(party: string, uid: string): string {
 
       var PARTY = ${JSON.stringify(safeParty)};
       var UID = ${JSON.stringify(safeUid)};
-      var DB_NAME = 'cc-encryption-keys';
+      var DB_NAME = 'cloak-encryption-keys';
       var STORE_NAME = 'private-keys';
       var useWebCrypto = !!(crypto && crypto.subtle);
 
