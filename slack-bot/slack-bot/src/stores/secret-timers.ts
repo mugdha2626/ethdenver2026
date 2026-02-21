@@ -4,8 +4,7 @@
  */
 
 import type { App } from '@slack/bolt';
-import { formatTimeRemaining, inboxItemWithLink, expiredSecretMessage } from '../utils/slack-blocks';
-import { revokeTokensForContract } from './view-tokens';
+import { formatTimeRemaining, inboxItem, expiredSecretMessage } from '../utils/slack-blocks';
 
 interface TrackedSecret {
   messageTs: string;
@@ -14,10 +13,10 @@ interface TrackedSecret {
   senderDisplay: string;
   expiresAt: string | null;
   timerId: ReturnType<typeof setInterval> | null;
-  // Context needed to rebuild blocks on each tick (NO secret — it stays on Canton only)
+  // Full context needed to rebuild blocks on each tick
   description: string;
+  secret: string;
   sentAt: string;
-  viewUrl: string;
 }
 
 const tracked = new Map<string, TrackedSecret>();
@@ -48,7 +47,6 @@ async function tick(contractId: string): Promise<void> {
   try {
     if (expired) {
       // Final update: replace DM with expired notice
-      revokeTokensForContract(contractId);
       await slackClient.chat.update({
         channel: entry.channelId,
         ts: entry.messageTs,
@@ -57,14 +55,14 @@ async function tick(contractId: string): Promise<void> {
       });
       untrackSecret(contractId);
     } else {
-      // Rebuild blocks with fresh countdown using link-based layout (no secret content)
-      const blocks = inboxItemWithLink(
+      // Rebuild blocks with fresh countdown
+      const blocks = inboxItem(
         entry.senderDisplay,
         entry.label,
         entry.description,
+        entry.secret,
         entry.sentAt,
         contractId,
-        entry.viewUrl,
         entry.expiresAt
       );
       await slackClient.chat.update({
@@ -100,8 +98,8 @@ export function trackSecret(
   senderDisplay: string,
   expiresAt: string | null,
   description: string,
-  sentAt: string,
-  viewUrl: string
+  secret: string,
+  sentAt: string
 ): void {
   let timerId: ReturnType<typeof setInterval> | null = null;
 
@@ -118,8 +116,8 @@ export function trackSecret(
     expiresAt,
     timerId,
     description,
+    secret,
     sentAt,
-    viewUrl,
   });
 }
 

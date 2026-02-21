@@ -12,10 +12,6 @@ const CANTON_URL = process.env.CANTON_JSON_API_URL || 'http://localhost:7575';
 // Package ID cache — extracted from DAR at startup
 let packageId: string | null = null;
 
-export function getPackageId(): string | null {
-  return packageId;
-}
-
 // Operator party full identifier — set at startup
 let operatorParty: string = 'operator';
 

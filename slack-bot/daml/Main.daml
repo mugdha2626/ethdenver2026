@@ -1,0 +1,279 @@
+-- ConfidentialConnect: Privacy Black Box on Canton
+-- All 5 contract templates for secret verification and sharing
+
+module Main where
+
+import Daml.Script
+import DA.Time
+import DA.Text (sha256)
+import DA.Optional
+
+-- ============================================================
+-- DATA TYPES
+-- ============================================================
+
+data VerificationStatus = Passed | Failed
+  deriving (Eq, Show)
+
+data VerificationMetadata = VerificationMetadata
+  with
+    service : Text          -- "aws", "stripe", "github", etc.
+    apiEndpoint : Text      -- Which API was called
+    responseId : Text       -- Safe non-secret ID (account ID, username)
+    permissions : [Text]    -- Detected permissions/scopes
+    verifiedAt : Text       -- ISO timestamp
+  deriving (Eq, Show)
+
+-- ============================================================
+-- 1. UserIdentity - Slack-to-Canton party mapping
+-- ============================================================
+
+template UserIdentity
+  with
+    operator : Party        -- The bot/platform operator
+    user : Party            -- The Canton party for this Slack user
+    slackUserId : Text      -- Slack user ID (e.g., "U01ABC123")
+    slackUsername : Text    -- Slack display name
+    registeredAt : Text     -- ISO timestamp
+  where
+    signatory operator
+    observer user
+
+    key (operator, slackUserId) : (Party, Text)
+    maintainer key._1
+
+    -- Allows updating the username if it changes
+    choice UpdateUsername : ContractId UserIdentity
+      with
+        newUsername : Text
+      controller operator
+      do
+        create this with slackUsername = newUsername
+
+-- ============================================================
+-- 2. SecretCommitment - Hash of a secret (VERIFY mode)
+-- ============================================================
+
+template SecretCommitment
+  with
+    owner : Party           -- The user who owns the secret
+    operator : Party        -- Bot (needs to record verification)
+    label : Text            -- User-chosen label ("aws", "stripe-prod", etc.)
+    commitment : Text       -- SHA-256 hash of (secret + salt)
+    committedAt : Text      -- ISO timestamp
+  where
+    signatory owner
+    observer operator
+
+    key (owner, label) : (Party, Text)
+    maintainer key._1
+
+    -- Record a verification result against this commitment
+    nonconsuming choice RecordVerification : ContractId VerificationResult
+      with
+        status : VerificationStatus
+        metadata : VerificationMetadata
+      controller operator
+      do
+        create VerificationResult with
+          operator = operator
+          owner = owner
+          label = label
+          commitment = commitment
+          status = status
+          metadata = metadata
+
+    -- Rotate: replace the commitment hash (e.g., after key rotation)
+    choice Rotate : ContractId SecretCommitment
+      with
+        newCommitment : Text
+        rotatedAt : Text
+      controller owner
+      do
+        create this with
+          commitment = newCommitment
+          committedAt = rotatedAt
+
+    -- Revoke: archive this commitment (secret no longer tracked)
+    choice Revoke : ()
+      controller owner
+      do
+        return ()
+
+-- ============================================================
+-- 3. VerificationResult - Outcome of live API verification
+-- ============================================================
+
+template VerificationResult
+  with
+    operator : Party        -- Bot attests to the verification
+    owner : Party           -- Owner of the secret
+    label : Text            -- Same label as the commitment
+    commitment : Text       -- Hash that was verified against
+    status : VerificationStatus
+    metadata : VerificationMetadata
+  where
+    signatory operator
+    observer owner
+
+    key (operator, owner, label) : (Party, Party, Text)
+    maintainer key._1
+
+    -- Share the verification RESULT (not the secret) with a third party
+    nonconsuming choice ShareProof : ContractId SharedProof
+      with
+        recipient : Party
+        purpose : Text      -- Why sharing (e.g., "Quarterly audit")
+        sharedAt : Text
+      controller owner
+      do
+        create SharedProof with
+          owner = owner
+          recipient = recipient
+          service = metadata.service
+          status = status
+          responseId = metadata.responseId
+          permissions = metadata.permissions
+          purpose = purpose
+          sharedAt = sharedAt
+          label = label
+
+-- ============================================================
+-- 4. SharedProof - Verification receipt for auditor/partner
+-- ============================================================
+
+template SharedProof
+  with
+    owner : Party           -- Who owns the verified secret
+    recipient : Party       -- Who can see this proof
+    service : Text          -- "aws", "stripe", "github"
+    status : VerificationStatus
+    responseId : Text       -- Safe ID (account number, username)
+    permissions : [Text]    -- What the secret can do
+    purpose : Text          -- Why it was shared
+    sharedAt : Text         -- When it was shared
+    label : Text            -- Label of the secret
+  where
+    signatory owner
+    observer recipient
+
+    -- Recipient can acknowledge they've seen it
+    choice AcknowledgeProof : ()
+      controller recipient
+      do
+        return ()
+
+-- ============================================================
+-- 5. SecretTransfer - Actual secret transfer (SHARE mode)
+--    THIS IS THE KEY CONTRACT: Canton ensures only sender
+--    and recipient nodes ever receive this data
+-- ============================================================
+
+template SecretTransfer
+  with
+    sender : Party          -- Who is sending the secret
+    recipient : Party       -- Who receives the secret
+    operator : Party        -- Bot (facilitates the transfer)
+    label : Text            -- User-chosen label
+    encryptedSecret : Text  -- The actual secret (protected by Canton privacy)
+    description : Text      -- Description of what this secret is
+    sentAt : Text           -- ISO timestamp
+    expiresAt : Optional Text  -- Optional expiry
+  where
+    signatory sender
+    observer recipient, operator
+
+    key (sender, recipient, label) : (Party, Party, Text)
+    maintainer key._1
+
+    -- Recipient acknowledges receipt -> archives the contract
+    choice Acknowledge : ()
+      controller recipient
+      do
+        return ()
+
+    -- Sender can revoke before recipient acknowledges
+    choice RevokeTransfer : ()
+      controller sender
+      do
+        return ()
+
+-- ============================================================
+-- TESTS (daml test)
+-- ============================================================
+
+setup : Script ()
+setup = script do
+  -- Create parties
+  operator <- allocateParty "Operator"
+  alice <- allocateParty "Alice"
+  bob <- allocateParty "Bob"
+  auditor <- allocateParty "Auditor"
+
+  -- 1. Register users
+  aliceIdentity <- submit operator do
+    createCmd UserIdentity with
+      operator = operator
+      user = alice
+      slackUserId = "U01ALICE"
+      slackUsername = "alice"
+      registeredAt = "2026-02-19T00:00:00Z"
+
+  bobIdentity <- submit operator do
+    createCmd UserIdentity with
+      operator = operator
+      user = bob
+      slackUserId = "U02BOB"
+      slackUsername = "bob"
+      registeredAt = "2026-02-19T00:00:00Z"
+
+  -- 2. Alice commits a secret hash
+  commitment <- submit alice do
+    createCmd SecretCommitment with
+      owner = alice
+      operator = operator
+      label = "aws"
+      commitment = "e7f8a9b2c3d4e5f6..."
+      committedAt = "2026-02-19T00:01:00Z"
+
+  -- 3. Operator records a verification result
+  verResult <- submit operator do
+    exerciseCmd commitment RecordVerification with
+      status = Passed
+      metadata = VerificationMetadata with
+        service = "aws"
+        apiEndpoint = "sts.amazonaws.com"
+        responseId = "123456789012"
+        permissions = ["iam", "s3", "ec2"]
+        verifiedAt = "2026-02-19T00:02:00Z"
+
+  -- 4. Alice shares the proof with auditor
+  sharedProof <- submit alice do
+    exerciseCmd verResult ShareProof with
+      recipient = auditor
+      purpose = "Quarterly security audit"
+      sharedAt = "2026-02-19T00:03:00Z"
+
+  -- 5. Alice sends actual secret to Bob via SecretTransfer
+  transfer <- submit alice do
+    createCmd SecretTransfer with
+      sender = alice
+      recipient = bob
+      operator = operator
+      label = "aws-prod"
+      encryptedSecret = "AKIAIOSFODNN7EXAMPLE:wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+      description = "Production AWS key for deployment"
+      sentAt = "2026-02-19T00:04:00Z"
+      expiresAt = None
+
+  -- 6. Bob acknowledges receipt
+  submit bob do
+    exerciseCmd transfer Acknowledge
+
+  -- 7. Alice can rotate her commitment
+  newCommitment <- submit alice do
+    exerciseCmd commitment Rotate with
+      newCommitment = "a1b2c3d4e5f6g7h8..."
+      rotatedAt = "2026-02-19T00:05:00Z"
+
+  return ()

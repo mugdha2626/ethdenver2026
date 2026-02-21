@@ -12,12 +12,11 @@ services:
       - "7575:7575"   # JSON API (HTTP)
     volumes:
       - ./daml/.daml/dist:/opt/daml/dist
-      - ./daml/viewer:/opt/daml/viewer
     command: >
       sh -c "
         daml sandbox --dar /opt/daml/dist/confidential-connect-0.1.0.dar --port 6865 &
         sleep 5 &&
-        daml json-api --ledger-host localhost --ledger-port 6865 --http-port 7575 --allow-insecure-tokens --static-content 'prefix=viewer,directory=/opt/daml/viewer'
+        daml json-api --ledger-host localhost --ledger-port 6865 --http-port 7575 --allow-insecure-tokens
       "
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:7575/v1/query"]

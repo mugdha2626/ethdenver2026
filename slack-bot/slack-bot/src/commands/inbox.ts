@@ -6,11 +6,8 @@
 import type { App } from '@slack/bolt';
 import { queryContracts, exerciseChoice } from '../services/canton';
 import { getPartyBySlackId, getSlackIdByParty } from '../stores/party-mapping';
-import { errorMessage, header, inboxItemWithLink, section, context, divider } from '../utils/slack-blocks';
+import { errorMessage, header, inboxItem, section, context, divider } from '../utils/slack-blocks';
 import { getTrackedSecret, untrackSecret } from '../stores/secret-timers';
-import { createViewToken, revokeTokensForContract } from '../stores/view-tokens';
-
-const webBaseUrl = process.env.WEB_BASE_URL || 'http://localhost:3100';
 
 export function inboxCommand(app: App): void {
   app.command('/cc-inbox', async ({ command, ack, respond }) => {
@@ -70,7 +67,7 @@ export function inboxCommand(app: App): void {
         return;
       }
 
-      // Build inbox view — NO secret content, just metadata + one-time links
+      // Build inbox view
       const blocks: any[] = [header('Your Inbox'), divider()];
 
       for (const transfer of active) {
@@ -81,22 +78,14 @@ export function inboxCommand(app: App): void {
           ? `<@${senderMapping.slackUserId}>`
           : senderParty;
 
-        const viewToken = createViewToken(
-          transfer.contractId,
-          mapping.cantonParty,
-          command.user_id,
-          payload.expiresAt || null
-        );
-        const viewUrl = `${webBaseUrl}/secret/${viewToken}`;
-
         blocks.push(
-          ...inboxItemWithLink(
+          ...inboxItem(
             senderDisplay,
             payload.label,
             payload.description,
+            payload.encryptedSecret,
             payload.sentAt,
             transfer.contractId,
-            viewUrl,
             payload.expiresAt
           )
         );
@@ -104,8 +93,8 @@ export function inboxCommand(app: App): void {
 
       blocks.push(
         context(
-          'Secrets are stored *only on Canton* — they never touch Slack.',
-          'Click the link to view each secret in your browser (one-time use).'
+          'These secrets are visible *only to you* on Canton.',
+          'Click "Acknowledge Receipt" to archive each transfer.'
         )
       );
 
@@ -122,70 +111,6 @@ export function inboxCommand(app: App): void {
           `Error: ${err instanceof Error ? err.message : 'Unknown error'}`
         ),
       });
-    }
-  });
-
-  // Handle "View Secret" button — backward compat for old-style buttons.
-  // Generates a one-time token and DMs the user a link instead of opening a modal.
-  app.action('view_secret', async ({ ack, body, client }) => {
-    await ack();
-
-    if (body.type !== 'block_actions' || !body.actions[0]) return;
-
-    const action = body.actions[0] as { value?: string };
-    const contractId = action.value;
-    const slackUserId = body.user.id;
-
-    const mapping = getPartyBySlackId(slackUserId);
-    if (!mapping || !contractId) return;
-
-    try {
-      // Verify the contract still exists
-      const transfers = await queryContracts(
-        mapping.cantonParty,
-        'SecretTransfer',
-        { recipient: mapping.cantonParty }
-      );
-
-      const transfer = transfers.find((t) => t.contractId === contractId);
-      if (!transfer) {
-        await client.chat.postMessage({
-          channel: slackUserId,
-          text: 'This secret may have expired or already been acknowledged.',
-        });
-        return;
-      }
-
-      const payload = transfer.payload as Record<string, any>;
-      const viewToken = createViewToken(
-        contractId,
-        mapping.cantonParty,
-        slackUserId,
-        payload.expiresAt || null
-      );
-      const viewUrl = `${webBaseUrl}/secret/${viewToken}`;
-
-      await client.chat.postMessage({
-        channel: slackUserId,
-        text: `Open this one-time link to view your secret: ${viewUrl}`,
-        blocks: [
-          {
-            type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: `*Secret:* \`${payload.label}\`\n\n<${viewUrl}|Open Secret> — _one-time link, opens in browser_`,
-            },
-          },
-          {
-            type: 'context',
-            elements: [
-              { type: 'mrkdwn', text: 'This link can only be used once. The secret never passes through Slack.' },
-            ],
-          },
-        ],
-      });
-    } catch (err) {
-      console.error('View secret error:', err);
     }
   });
 
@@ -228,9 +153,6 @@ export function inboxCommand(app: App): void {
         'Acknowledge',
         {}
       );
-
-      // Revoke any outstanding view tokens for this contract
-      revokeTokensForContract(contractId);
 
       // Try to update the tracked DM message directly
       const trackedEntry = getTrackedSecret(contractId);
