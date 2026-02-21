@@ -10,9 +10,22 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
-    @keyframes float {
-      0%, 100% { transform: translateY(0px); }
-      50% { transform: translateY(-15px); }
+    @keyframes hexDrift1 {
+      0% { transform: translate(0, 0) rotate(0deg); opacity: 0.05; }
+      50% { transform: translate(-30px, -40px) rotate(180deg); opacity: 0.08; }
+      100% { transform: translate(0, 0) rotate(360deg); opacity: 0.05; }
+    }
+
+    @keyframes hexDrift2 {
+      0% { transform: translate(0, 0) rotate(0deg); opacity: 0.06; }
+      50% { transform: translate(40px, -30px) rotate(-180deg); opacity: 0.09; }
+      100% { transform: translate(0, 0) rotate(-360deg); opacity: 0.06; }
+    }
+
+    @keyframes hexDrift3 {
+      0% { transform: translate(0, 0) rotate(0deg); opacity: 0.04; }
+      50% { transform: translate(-25px, 35px) rotate(180deg); opacity: 0.07; }
+      100% { transform: translate(0, 0) rotate(360deg); opacity: 0.04; }
     }
 
     @keyframes shimmer {
@@ -57,6 +70,23 @@
       font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Roboto Mono', 'Courier New', monospace;
       position: relative;
       overflow-x: hidden;
+    }
+
+    /* Animated mesh overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-image:
+        linear-gradient(rgba(139, 92, 246, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(139, 92, 246, 0.05) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 1;
+      opacity: 0.4;
     }
 
 
@@ -109,6 +139,22 @@
       animation-delay: -4s;
     }
 
+    /* Floating hexagons */
+    .hex {
+      position: fixed;
+      color: rgba(139, 92, 246, 0.15);
+      pointer-events: none;
+      z-index: 1;
+      font-size: 100px;
+      line-height: 1;
+    }
+
+    .hex1 { top: 8%; right: 12%; animation: hexDrift1 22s ease-in-out infinite; }
+    .hex2 { top: 55%; right: 5%; font-size: 70px; animation: hexDrift2 28s ease-in-out infinite; animation-delay: -5s; }
+    .hex3 { top: 20%; left: 8%; font-size: 120px; animation: hexDrift3 25s ease-in-out infinite; animation-delay: -10s; }
+    .hex4 { bottom: 15%; left: 12%; font-size: 80px; animation: hexDrift1 26s ease-in-out infinite; animation-delay: -15s; }
+    .hex5 { top: 75%; left: 45%; font-size: 90px; animation: hexDrift2 30s ease-in-out infinite; animation-delay: -8s; }
+    .hex6 { top: 40%; right: 30%; font-size: 60px; animation: hexDrift3 24s ease-in-out infinite; animation-delay: -12s; }
 
     .container {
       max-width: 700px;
@@ -449,6 +495,7 @@
       h1 { font-size: 2rem; letter-spacing: 6px; }
       .meta-row { grid-template-columns: 1fr; gap: 0.5rem; }
       .actions { grid-template-columns: 1fr; }
+      .hex { display: none; }
     }
   </style>
 </head>
@@ -457,6 +504,14 @@
   <div class="gradient-orb gradient-orb-2"></div>
   <div class="gradient-orb gradient-orb-3"></div>
   <div class="gradient-orb gradient-orb-4"></div>
+
+  <!-- Floating hexagons -->
+  <div class="hex hex1">⬡</div>
+  <div class="hex hex2">⬢</div>
+  <div class="hex hex3">⬡</div>
+  <div class="hex hex4">⬢</div>
+  <div class="hex hex5">⬡</div>
+  <div class="hex hex6">⬢</div>
 
   <div class="container" id="loading-view">
     <h1>CLOAK</h1>
