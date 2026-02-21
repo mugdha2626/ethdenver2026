@@ -166,7 +166,7 @@ export function startWebServer(port: number, slackApp: App): void {
     if (!tokenInfo) {
       res.status(410).send(renderErrorPage(
         'Link Expired or Invalid',
-        'This compose link has expired, been used, or is invalid. Run /cc-send again to get a new link.'
+        'This compose link has expired, been used, or is invalid. Run /cloak-send again to get a new link.'
       ));
       return;
     }

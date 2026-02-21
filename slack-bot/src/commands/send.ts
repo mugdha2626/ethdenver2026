@@ -1,5 +1,5 @@
 /**
- * /cc-send <label> @user - Send an actual secret to someone via Canton
+ * /cloak-send <label> @user - Send an actual secret to someone via Canton
  *
  * E2E encryption flow: Instead of a Slack modal (which would expose the secret to Slack),
  * this command generates a short-lived compose link. The sender opens the link in their
@@ -14,7 +14,7 @@ import { createSendToken } from '../stores/send-tokens';
 import { errorMessage } from '../utils/slack-blocks';
 
 export function sendCommand(app: App): void {
-  app.command('/cc-send', async ({ command, ack, respond }) => {
+  app.command('/cloak-send', async ({ command, ack, respond }) => {
     await ack();
     const webBaseUrl = process.env.WEB_BASE_URL || 'http://localhost:3100';
 
@@ -22,19 +22,19 @@ export function sendCommand(app: App): void {
     if (!mapping) {
       await respond({
         response_type: 'ephemeral',
-        blocks: errorMessage('Not Registered', 'Please run `/cc-register` first.'),
+        blocks: errorMessage('Not Registered', 'Please run `/cloak-register` first.'),
       });
       return;
     }
 
-    // Parse: /cc-send <label> @user
+    // Parse: /cloak-send <label> @user
     const parts = command.text.trim().split(/\s+/);
     if (parts.length < 2) {
       await respond({
         response_type: 'ephemeral',
         blocks: errorMessage(
           'Usage',
-          '`/cc-send <label> @user`\nExample: `/cc-send aws-prod @bob`'
+          '`/cloak-send <label> @user`\nExample: `/cloak-send aws-prod @bob`'
         ),
       });
       return;
@@ -66,7 +66,7 @@ export function sendCommand(app: App): void {
         response_type: 'ephemeral',
         blocks: errorMessage(
           'Recipient Not Found',
-          `Could not find a registered user for "${userMention}". Make sure they've run \`/cc-register\` first.`
+          `Could not find a registered user for "${userMention}". Make sure they've run \`/cloak-register\` first.`
         ),
       });
       return;
@@ -78,7 +78,7 @@ export function sendCommand(app: App): void {
         response_type: 'ephemeral',
         blocks: errorMessage(
           'Recipient Has No Encryption Keys',
-          `<@${recipientSlackId}> hasn't set up their encryption keys yet. Ask them to check their DMs for the setup link (sent after \`/cc-register\`).`
+          `<@${recipientSlackId}> hasn't set up their encryption keys yet. Ask them to check their DMs for the setup link (sent after \`/cloak-register\`).`
         ),
       });
       return;

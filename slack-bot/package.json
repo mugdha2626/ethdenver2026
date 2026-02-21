@@ -1,7 +1,7 @@
 {
-  "name": "confidential-connect-bot",
+  "name": "cloak-bot",
   "version": "0.1.0",
-  "description": "ConfidentialConnect: Privacy Black Box on Canton, powered by Slack",
+  "description": "Cloak: Privacy Black Box on Canton, powered by Slack",
   "main": "src/index.ts",
   "scripts": {
     "dev": "tsx watch src/index.ts",

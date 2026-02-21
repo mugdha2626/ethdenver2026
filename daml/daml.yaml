@@ -1,5 +1,5 @@
 sdk-version: 2.9.3
-name: confidential-connect
+name: cloak
 source: .
 version: 0.1.0
 dependencies:

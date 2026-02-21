@@ -6,7 +6,7 @@
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self'">
   <meta name="robots" content="noindex, nofollow">
-  <title>ConfidentialConnect — Secret</title>
+  <title>Cloak — Secret</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -151,7 +151,7 @@
 </head>
 <body>
   <div class="container" id="loading-view">
-    <h1>ConfidentialConnect</h1>
+    <h1>Cloak</h1>
     <div class="loading">
       <div class="spinner"></div>
       <p>Fetching secret from Canton ledger...</p>
@@ -159,7 +159,7 @@
   </div>
 
   <div class="container" id="secret-view" style="display:none;">
-    <h1>ConfidentialConnect</h1>
+    <h1>Cloak</h1>
     <div class="meta" id="meta-section"></div>
     <div class="secret-box">
       <div class="secret-label">Secret</div>
@@ -286,7 +286,7 @@
       });
 
       // --- IndexedDB helpers for E2E decryption ---
-      var IDB_NAME = 'cc-encryption-keys';
+      var IDB_NAME = 'cloak-encryption-keys';
       var IDB_STORE = 'private-keys';
 
       function openIDB() {

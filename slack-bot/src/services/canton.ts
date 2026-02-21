@@ -61,13 +61,13 @@ interface LedgerResponse {
 export async function discoverPackageId(): Promise<string> {
   if (packageId) return packageId;
 
-  const darPath = process.env.DAR_PATH || path.resolve(__dirname, '../../../daml/.daml/dist/confidential-connect-0.1.0.dar');
+  const darPath = process.env.DAR_PATH || path.resolve(__dirname, '../../../daml/.daml/dist/cloak-0.1.0.dar');
 
   try {
     // List DAR contents and find our main DALF
     const output = execSync(`unzip -l "${darPath}" 2>/dev/null`).toString();
-    // DALF filename format: confidential-connect-0.1.0-<packageId>.dalf
-    const match = output.match(/confidential-connect-0\.1\.0-([a-f0-9]+)\.dalf/);
+    // DALF filename format: cloak-0.1.0-<packageId>.dalf
+    const match = output.match(/cloak-0\.1\.0-([a-f0-9]+)\.dalf/);
     if (match) {
       packageId = match[1];
       console.log(`  Package ID (from DAR): ${packageId.substring(0, 16)}...`);
@@ -129,7 +129,7 @@ export async function discoverPackageId(): Promise<string> {
   }
 
   throw new Error(
-    'Could not find confidential-connect package. Is the DAR uploaded to the sandbox?'
+    'Could not find cloak package. Is the DAR uploaded to the sandbox?'
   );
 }
 

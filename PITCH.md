@@ -1,4 +1,4 @@
-# ConfidentialConnect — Hackathon Pitch
+# Cloak — Hackathon Pitch
 
 **Canton ETHDenver Bounty | $8K, 3 Winners**
 
@@ -10,7 +10,7 @@ Judging criteria: Technical implementation, privacy model innovation, utility/im
 
 > "Every company shares secrets through Slack DMs. API keys, passwords, credentials — sitting in plaintext on Slack's servers forever. Admins can read them. They never expire. One breach and everything leaks."
 >
-> "We built **ConfidentialConnect** — a privacy black box where secrets travel through Canton and literally don't exist anywhere else."
+> "We built **Cloak** — a privacy black box where secrets travel through Canton and literally don't exist anywhere else."
 
 ---
 
@@ -29,7 +29,7 @@ Judging criteria: Technical implementation, privacy model innovation, utility/im
 
 ## The Solution (45 sec)
 
-> "ConfidentialConnect is a Slack bot where you type `/cc-send aws-key @bob`, paste your secret, and it travels through Canton. Here's what's different:"
+> "Cloak is a Slack bot where you type `/cloak-send aws-key @bob`, paste your secret, and it travels through Canton. Here's what's different:"
 
 ### Three killer features
 
@@ -53,14 +53,14 @@ Judging criteria: Technical implementation, privacy model innovation, utility/im
 
 | Step | Who | Action | What the audience sees |
 |------|-----|--------|----------------------|
-| 1 | Alice | `/cc-register` | Gets a Canton party identity + DM with encryption key setup link |
+| 1 | Alice | `/cloak-register` | Gets a Canton party identity + DM with encryption key setup link |
 | 2 | Alice | Opens setup link in browser | Browser generates RSA-OAEP 2048-bit keypair. Private key stored in IndexedDB (never leaves device). Public key sent to server. |
-| 3 | Bob | `/cc-register` + sets up keys | Same flow — now both have encryption keys |
-| 4 | Alice | `/cc-send prod-api-key @bob` | Gets a 10-minute compose link |
+| 3 | Bob | `/cloak-register` + sets up keys | Same flow — now both have encryption keys |
+| 4 | Alice | `/cloak-send prod-api-key @bob` | Gets a 10-minute compose link |
 | 5 | Alice | Opens compose link, pastes API key, picks "5 minute" TTL | Browser fetches Bob's public key, encrypts with AES-256-GCM + RSA-OAEP, POSTs ciphertext. **Plaintext never leaves Alice's browser.** |
 | 6 | Bob | Receives DM | One-time link + live countdown timer |
 | 7 | Bob | Clicks the one-time link | Secret decrypted in Bob's browser using his IndexedDB private key. Fetched from Canton via 60-second read-only JWT. |
-| 8 | Bob | `/cc-inbox` → clicks "Acknowledge Receipt" | Contract archived. Secret permanently gone from Canton. |
+| 8 | Bob | `/cloak-inbox` → clicks "Acknowledge Receipt" | Contract archived. Secret permanently gone from Canton. |
 | 9 | Anyone | Try the link again | 410 Gone — one-time token already consumed |
 
 > "From send to acknowledge, the plaintext secret existed only in two browsers. Not Slack's servers. Not our bot server. Not any other node on the network. And now it's gone forever."
@@ -81,7 +81,7 @@ Judging criteria: Technical implementation, privacy model innovation, utility/im
 
 ## Closing (15 sec)
 
-> "ConfidentialConnect. Institutional-grade secret sharing where the secret literally doesn't exist anywhere it shouldn't. Built on Canton because this is the one thing only Canton can do."
+> "Cloak. Institutional-grade secret sharing where the secret literally doesn't exist anywhere it shouldn't. Built on Canton because this is the one thing only Canton can do."
 
 ---
 
@@ -109,7 +109,7 @@ A: Hybrid encryption. The sender's browser generates a random AES-256 key, encry
 
 ### Q: What happens if the recipient loses their browser / clears storage?
 
-A: The private key is in IndexedDB. If cleared, they'd need to re-register (`/cc-register`) and set up new keys. Any secrets encrypted with the old key would be unrecoverable — by design. This is a feature, not a bug: it means there's no master key or recovery backdoor.
+A: The private key is in IndexedDB. If cleared, they'd need to re-register (`/cloak-register`) and set up new keys. Any secrets encrypted with the old key would be unrecoverable — by design. This is a feature, not a bug: it means there's no master key or recovery backdoor.
 
 ---
 

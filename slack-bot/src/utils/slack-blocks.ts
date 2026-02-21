@@ -1,5 +1,5 @@
 /**
- * Reusable Slack Block Kit builders for ConfidentialConnect
+ * Reusable Slack Block Kit builders for Cloak
  */
 
 import type { App } from '@slack/bolt';
@@ -90,7 +90,7 @@ export function successMessage(title: string, details: string): AnyBlock[] {
 export function errorMessage(title: string, details: string): AnyBlock[] {
   return [
     section(`*${title}*\n${details}`),
-    context('If this persists, try /cc-register first'),
+    context('If this persists, try /cloak-register first'),
   ];
 }
 
@@ -107,7 +107,7 @@ export function formatTimeRemaining(expiresAt: string): string {
   return `Expires in ${days} day${days === 1 ? '' : 's'}`;
 }
 
-/** Build the inbox view for /cc-inbox */
+/** Build the inbox view for /cloak-inbox */
 /** Build the "secret expired" replacement message for a DM */
 export function expiredSecretMessage(label: string, senderDisplay: string): AnyBlock[] {
   return [

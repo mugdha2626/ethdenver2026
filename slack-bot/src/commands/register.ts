@@ -1,5 +1,5 @@
 /**
- * /cc-register - Register a Slack user as a Canton party
+ * /cloak-register - Register a Slack user as a Canton party
  */
 
 import type { App } from '@slack/bolt';
@@ -8,7 +8,7 @@ import { savePartyMapping, getPartyBySlackId } from '../stores/party-mapping';
 import { successMessage, errorMessage } from '../utils/slack-blocks';
 
 export function registerCommand(app: App): void {
-  app.command('/cc-register', async ({ command, ack, respond, client }) => {
+  app.command('/cloak-register', async ({ command, ack, respond, client }) => {
     await ack();
     const webBaseUrl = process.env.WEB_BASE_URL || 'http://localhost:3100';
 
@@ -117,11 +117,11 @@ export function registerCommand(app: App): void {
       await respond({
         response_type: 'ephemeral',
         blocks: successMessage(
-          'Welcome to ConfidentialConnect!',
+          'Welcome to Cloak!',
           `Your private Canton identity is ready: \`${cantonParty}\`\n\n` +
             '*What you can do now:*\n' +
-            '> `/cc-send <label> @user` - Send a secret securely\n' +
-            '> `/cc-inbox` - View secrets shared with you\n\n' +
+            '> `/cloak-send <label> @user` - Send a secret securely\n' +
+            '> `/cloak-inbox` - View secrets shared with you\n\n' +
             '_Check your DMs for a link to set up end-to-end encryption._'
         ),
       });

@@ -1,4 +1,4 @@
--- ConfidentialConnect: Privacy Black Box on Canton
+-- Cloak: Privacy Black Box on Canton
 -- All 5 contract templates for secret verification and sharing
 
 module Main where

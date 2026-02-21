@@ -30,7 +30,7 @@ export function renderComposePage(
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow">
-  <title>ConfidentialConnect — Compose Secret</title>
+  <title>Cloak — Compose Secret</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -89,7 +89,7 @@ export function renderComposePage(
 </head>
 <body>
   <div class="container">
-    <h1>ConfidentialConnect</h1>
+    <h1>Cloak</h1>
     <p class="subtitle">Compose and encrypt your secret. It never leaves this browser unencrypted.</p>
 
     <div class="meta">

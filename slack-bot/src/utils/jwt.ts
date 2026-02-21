@@ -21,7 +21,7 @@ export function generateJwt(party: string): string {
     // Daml-specific claims
     'https://daml.com/ledger-api': {
       ledgerId: 'sandbox',
-      applicationId: 'confidential-connect',
+      applicationId: 'cloak',
       actAs: [party],
       readAs: [party],
     },
@@ -43,7 +43,7 @@ export function generateViewerJwt(party: string): string {
     sub: party,
     'https://daml.com/ledger-api': {
       ledgerId: 'sandbox',
-      applicationId: 'confidential-connect-viewer',
+      applicationId: 'cloak-viewer',
       actAs: [],
       readAs: [party],
     },

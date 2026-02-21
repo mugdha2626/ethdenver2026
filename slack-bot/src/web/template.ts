@@ -22,7 +22,7 @@ export function renderErrorPage(title: string, message: string): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ConfidentialConnect</title>
+  <title>Cloak</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -66,7 +66,7 @@ export function renderUnfurlPage(): string {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>ConfidentialConnect</title>
+  <title>Cloak</title>
   <meta name="robots" content="noindex, nofollow">
 </head>
 <body>

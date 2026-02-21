@@ -1,4 +1,4 @@
-# ConfidentialConnect
+# Cloak
 
 **A privacy black box for secrets, powered by Canton + Slack.**
 
@@ -12,9 +12,9 @@ Share secrets securely. Prove credentials are valid without revealing them. Cant
 ```
 Alice has an AWS key. Bob needs it.
 
-Alice → /cc-send aws @bob → pastes key in modal
+Alice → /cloak-send aws @bob → pastes key in modal
 Canton creates a contract visible ONLY to Alice and Bob.
-Bob → /cc-inbox → sees the key → clicks Acknowledge
+Bob → /cloak-inbox → sees the key → clicks Acknowledge
 Contract archived. Key gone from Canton. No Slack logs. No email trail.
 ```
 
@@ -22,9 +22,9 @@ Contract archived. Key gone from Canton. No Slack logs. No email trail.
 ```
 Alice has an AWS key. Auditor needs to confirm it works.
 
-Alice → /cc-commit aws → hashes key on Canton
-Alice → /cc-verify aws → live API call confirms it's valid
-Alice → /cc-prove aws @auditor → shares RESULT (not key)
+Alice → /cloak-commit aws → hashes key on Canton
+Alice → /cloak-verify aws → live API call confirms it's valid
+Alice → /cloak-prove aws @auditor → shares RESULT (not key)
 
 Auditor sees: "AWS | Passed | Account 123456789012"
 Auditor NEVER sees: the actual key
@@ -53,11 +53,11 @@ On **Canton**: Contracts are visible **only to their parties**. If Alice creates
 │              SLACK WORKSPACE                  │
 │                                              │
 │  SHARE MODE          VERIFY MODE             │
-│  /cc-send            /cc-commit              │
-│  /cc-inbox           /cc-verify              │
-│  /cc-status          /cc-prove               │
-│                      /cc-audit               │
-│                      /cc-register            │
+│  /cloak-send            /cloak-commit              │
+│  /cloak-inbox           /cloak-verify              │
+│  /cloak-status          /cloak-prove               │
+│                      /cloak-audit               │
+│                      /cloak-register            │
 └──────────────┬───────────────────────────────┘
                │ Socket Mode (WebSocket)
 ┌──────────────┴───────────────────────────────┐
@@ -113,13 +113,13 @@ cd daml/
 daml build
 ```
 
-This produces `daml/.daml/dist/confidential-connect-0.1.0.dar`.
+This produces `daml/.daml/dist/cloak-0.1.0.dar`.
 
 ### 3. Start Canton Sandbox
 
 ```bash
 cd daml/
-daml sandbox --dar .daml/dist/confidential-connect-0.1.0.dar --port 6865 &
+daml sandbox --dar .daml/dist/cloak-0.1.0.dar --port 6865 &
 sleep 10
 daml json-api --ledger-host localhost --ledger-port 6865 --http-port 7575 --allow-insecure-tokens
 ```
@@ -139,14 +139,14 @@ Leave this running. The sandbox listens on port 6865 (gRPC) and the JSON API on 
 
 | Command | Description |
 |---------|-------------|
-| `/cc-register` | Register your Canton identity |
-| `/cc-commit` | Commit a secret hash |
-| `/cc-verify` | Verify a secret via live API |
-| `/cc-prove` | Share proof with someone |
-| `/cc-send` | Send a secret securely |
-| `/cc-inbox` | View received secrets |
-| `/cc-audit` | Auditor dashboard |
-| `/cc-status` | Your overview |
+| `/cloak-register` | Register your Canton identity |
+| `/cloak-commit` | Commit a secret hash |
+| `/cloak-verify` | Verify a secret via live API |
+| `/cloak-prove` | Share proof with someone |
+| `/cloak-send` | Send a secret securely |
+| `/cloak-inbox` | View received secrets |
+| `/cloak-audit` | Auditor dashboard |
+| `/cloak-status` | Your overview |
 
 ### 5. Configure Environment
 
@@ -175,7 +175,7 @@ You should see:
   Package ID (from DAR): d9664c75...
 
   ╔══════════════════════════════════════════════════╗
-  ║        ConfidentialConnect is running!           ║
+  ║        Cloak is running!           ║
   ╚══════════════════════════════════════════════════╝
 ```
 
@@ -186,43 +186,43 @@ You should see:
 ### Registration
 | Command | What it does |
 |---------|-------------|
-| `/cc-register` | Creates a Canton party for your Slack identity. Run once. |
+| `/cloak-register` | Creates a Canton party for your Slack identity. Run once. |
 
 ### Share Mode (send actual secrets)
 | Command | What it does |
 |---------|-------------|
-| `/cc-send <label> @user` | Opens a modal to paste a secret. Creates a Canton contract visible only to you and the recipient. |
-| `/cc-inbox` | Shows secrets sent to you. Each has an **Acknowledge** button that archives the contract. |
-| `/cc-status` | Overview of all your commitments, verifications, and transfers. |
+| `/cloak-send <label> @user` | Opens a modal to paste a secret. Creates a Canton contract visible only to you and the recipient. |
+| `/cloak-inbox` | Shows secrets sent to you. Each has an **Acknowledge** button that archives the contract. |
+| `/cloak-status` | Overview of all your commitments, verifications, and transfers. |
 
 ### Verify Mode (prove without revealing)
 | Command | What it does |
 |---------|-------------|
-| `/cc-commit <label>` | Opens a modal to paste a secret. Hashes it (SHA-256 + salt) and stores only the hash on Canton. Secret is never stored. |
-| `/cc-verify <label>` | Opens a modal to re-enter the secret. Checks hash match, then calls the live external API (AWS STS, Stripe, GitHub). Records result on Canton. |
-| `/cc-prove <label> @user` | Shares the verification **result** (not the secret) with someone. They see "Passed, Account 123456" but never the key. |
-| `/cc-audit` | Shows all verification proofs shared with you. |
+| `/cloak-commit <label>` | Opens a modal to paste a secret. Hashes it (SHA-256 + salt) and stores only the hash on Canton. Secret is never stored. |
+| `/cloak-verify <label>` | Opens a modal to re-enter the secret. Checks hash match, then calls the live external API (AWS STS, Stripe, GitHub). Records result on Canton. |
+| `/cloak-prove <label> @user` | Shares the verification **result** (not the secret) with someone. They see "Passed, Account 123456" but never the key. |
+| `/cloak-audit` | Shows all verification proofs shared with you. |
 
 ---
 
 ## Demo Script (5 min)
 
 ### Setup (before demo)
-- Both users run `/cc-register`
+- Both users run `/cloak-register`
 - Have a test GitHub PAT or AWS key ready
 
 ### Act 1: Share Mode (2 min)
 ```
-Alice:  /cc-send aws-key @bob
+Alice:  /cloak-send aws-key @bob
         → pastes AWS key in modal
         → "Secret sent to @bob. Only you and Bob can see this on Canton."
 
-Bob:    /cc-inbox
+Bob:    /cloak-inbox
         → sees the actual key in ephemeral message
         → clicks [Acknowledge Receipt]
         → message replaced with "Secret archived!"
 
-Alice:  /cc-status
+Alice:  /cloak-status
         → transfer no longer listed — contract archived, key gone from Canton
 ```
 
@@ -230,18 +230,18 @@ Alice:  /cc-status
 
 ### Act 2: Verify Mode (2 min)
 ```
-Alice:  /cc-commit github
+Alice:  /cloak-commit github
         → pastes GitHub token in modal
         → "Secret committed. Hash: e7f8a9..."
 
-Alice:  /cc-verify github
+Alice:  /cloak-verify github
         → re-enters token in modal
         → bot calls GitHub API → "GitHub verified! Username: octocat"
 
-Alice:  /cc-prove github @auditor
+Alice:  /cloak-prove github @auditor
         → "Shared with @auditor. They can see the result but not your secret."
 
-Auditor: /cc-audit
+Auditor: /cloak-audit
         → sees: "@alice | github | Passed | octocat | Feb 19 2026"
         → cannot see: the token, the hash, or anything else
 ```
@@ -301,14 +301,14 @@ ethdenver2026/
     src/
       index.ts                       # Entry point
       commands/
-        register.ts                  # /cc-register
-        commit.ts                    # /cc-commit
-        verify.ts                    # /cc-verify
-        prove.ts                     # /cc-prove
-        send.ts                      # /cc-send
-        inbox.ts                     # /cc-inbox
-        audit.ts                     # /cc-audit
-        status.ts                    # /cc-status
+        register.ts                  # /cloak-register
+        commit.ts                    # /cloak-commit
+        verify.ts                    # /cloak-verify
+        prove.ts                     # /cloak-prove
+        send.ts                      # /cloak-send
+        inbox.ts                     # /cloak-inbox
+        audit.ts                     # /cloak-audit
+        status.ts                    # /cloak-status
       services/
         canton.ts                    # Canton JSON API client
         crypto.ts                    # SHA-256 + salt hashing

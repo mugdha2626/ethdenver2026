@@ -1,5 +1,5 @@
 /**
- * ConfidentialConnect - Slack Bot Entry Point
+ * Cloak - Slack Bot Entry Point
  * A privacy black box powered by Canton + Slack
  */
 
@@ -58,9 +58,9 @@ app.error(async (error) => {
 initTimerManager(app.client);
 
 // Register all commands
-registerCommand(app);   // /cc-register
-sendCommand(app);       // /cc-send
-inboxCommand(app);      // /cc-inbox
+registerCommand(app);   // /cloak-register
+sendCommand(app);       // /cloak-send
+inboxCommand(app);      // /cloak-inbox
 
 // Health check / startup
 async function start(): Promise<void> {
@@ -119,7 +119,7 @@ async function start(): Promise<void> {
   const webBaseUrl = process.env.WEB_BASE_URL || `http://localhost:${webPort}`;
   console.log('');
   console.log('  ╔══════════════════════════════════════════════════════╗');
-  console.log('  ║          ConfidentialConnect is running!             ║');
+  console.log('  ║               Cloak is running!                      ║');
   console.log('  ║                                                      ║');
   console.log('  ║  Slack Bot:  Connected (Socket Mode)                 ║');
   console.log(`  ║  Canton API: ${(process.env.CANTON_JSON_API_URL || 'http://localhost:7575').padEnd(40)}║`);
@@ -130,9 +130,9 @@ async function start(): Promise<void> {
   console.log(`  ║  DM Links:   ${webBaseUrl.padEnd(40)}║`);
   console.log('  ║                                                      ║');
   console.log('  ║  Commands:                                           ║');
-  console.log('  ║    /cc-register  - Register Canton identity          ║');
-  console.log('  ║    /cc-send      - Send secret to someone            ║');
-  console.log('  ║    /cc-inbox     - View received secrets             ║');
+  console.log('  ║    /cloak-register  - Register Canton identity       ║');
+  console.log('  ║    /cloak-send      - Send secret to someone         ║');
+  console.log('  ║    /cloak-inbox     - View received secrets          ║');
   console.log('  ╚══════════════════════════════════════════════════════╝');
   console.log('');
 }

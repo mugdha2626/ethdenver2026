@@ -23,7 +23,7 @@ export function renderSetupKeysPage(party: string, uid: string): string {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow">
-  <title>ConfidentialConnect — Set Up Encryption</title>
+  <title>Cloak — Set Up Encryption</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -74,7 +74,7 @@ export function renderSetupKeysPage(party: string, uid: string): string {
 </head>
 <body>
   <div class="container">
-    <h1>ConfidentialConnect</h1>
+    <h1>Cloak</h1>
     <p class="subtitle">Set up end-to-end encryption for your secrets. Your private key never leaves this browser.</p>
 
     <div class="status-box" id="status-box">
@@ -91,7 +91,7 @@ export function renderSetupKeysPage(party: string, uid: string): string {
 
       var PARTY = ${JSON.stringify(safeParty)};
       var UID = ${JSON.stringify(safeUid)};
-      var DB_NAME = 'cc-encryption-keys';
+      var DB_NAME = 'cloak-encryption-keys';
       var STORE_NAME = 'private-keys';
       var useWebCrypto = !!(crypto && crypto.subtle);
 

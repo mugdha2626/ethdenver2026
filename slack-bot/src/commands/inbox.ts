@@ -1,5 +1,5 @@
 /**
- * /cc-inbox - View secrets shared with you
+ * /cloak-inbox - View secrets shared with you
  * Shows secrets in ephemeral messages (only you see them)
  */
 
@@ -13,14 +13,14 @@ import { createViewToken, revokeTokensForContract } from '../stores/view-tokens'
 const webBaseUrl = process.env.WEB_BASE_URL || 'http://localhost:3100';
 
 export function inboxCommand(app: App): void {
-  app.command('/cc-inbox', async ({ command, ack, respond }) => {
+  app.command('/cloak-inbox', async ({ command, ack, respond }) => {
     await ack();
 
     const mapping = getPartyBySlackId(command.user_id);
     if (!mapping) {
       await respond({
         response_type: 'ephemeral',
-        blocks: errorMessage('Not Registered', 'Please run `/cc-register` first.'),
+        blocks: errorMessage('Not Registered', 'Please run `/cloak-register` first.'),
       });
       return;
     }
@@ -64,7 +64,7 @@ export function inboxCommand(app: App): void {
           blocks: [
             header('Your Inbox'),
             section('_No secrets waiting for you._'),
-            context('When someone sends you a secret via `/cc-send`, it will appear here.'),
+            context('When someone sends you a secret via `/cloak-send`, it will appear here.'),
           ],
         });
         return;
