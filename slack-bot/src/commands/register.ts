@@ -8,8 +8,9 @@ import { savePartyMapping, getPartyBySlackId } from '../stores/party-mapping';
 import { successMessage, errorMessage } from '../utils/slack-blocks';
 
 export function registerCommand(app: App): void {
-  app.command('/cc-register', async ({ command, ack, respond }) => {
+  app.command('/cc-register', async ({ command, ack, respond, client }) => {
     await ack();
+    const webBaseUrl = process.env.WEB_BASE_URL || 'http://localhost:3100';
 
     const slackUserId = command.user_id;
     const slackUsername = command.user_name;
@@ -57,14 +58,22 @@ export function registerCommand(app: App): void {
         }
       }
 
-      // Create UserIdentity contract on Canton
-      await createContract(getOperatorParty(), 'UserIdentity', {
-        operator: getOperatorParty(),
-        user: cantonParty,
-        slackUserId,
-        slackUsername,
-        registeredAt: new Date().toISOString(),
-      });
+      // Create UserIdentity contract on Canton (skip if already exists from a previous registration)
+      try {
+        await createContract(getOperatorParty(), 'UserIdentity', {
+          operator: getOperatorParty(),
+          user: cantonParty,
+          slackUserId,
+          slackUsername,
+          registeredAt: new Date().toISOString(),
+        });
+      } catch (contractErr) {
+        if (contractErr instanceof Error && contractErr.message.includes('DUPLICATE_CONTRACT_KEY')) {
+          console.log(`UserIdentity contract already exists for ${cantonParty}, reusing.`);
+        } else {
+          throw contractErr;
+        }
+      }
 
       // Save mapping locally
       savePartyMapping({
@@ -74,6 +83,37 @@ export function registerCommand(app: App): void {
         registeredAt: new Date().toISOString(),
       });
 
+      // DM the user a link to set up E2E encryption keys
+      const setupUrl = `${webBaseUrl}/setup-keys?party=${encodeURIComponent(cantonParty)}&uid=${encodeURIComponent(slackUserId)}`;
+      try {
+        await client.chat.postMessage({
+          channel: slackUserId,
+          text: `Set up E2E encryption: ${setupUrl}`,
+          blocks: [
+            {
+              type: 'header',
+              text: { type: 'plain_text', text: 'Set Up Encryption Keys', emoji: true },
+            },
+            {
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text:
+                  'To enable *end-to-end encrypted* secret sharing, set up your encryption keys.\n\n' +
+                  'Your private key stays in your browser — it never leaves your device.\n\n' +
+                  `<${setupUrl}|Set Up Encryption Keys>`,
+              },
+            },
+            {
+              type: 'context',
+              elements: [{ type: 'mrkdwn', text: 'Open this link in the browser you\'ll use to view secrets.' }],
+            },
+          ],
+        });
+      } catch {
+        console.warn(`Could not DM setup link to ${slackUserId}`);
+      }
+
       await respond({
         response_type: 'ephemeral',
         blocks: successMessage(
@@ -81,7 +121,8 @@ export function registerCommand(app: App): void {
           `Your private Canton identity is ready: \`${cantonParty}\`\n\n` +
             '*What you can do now:*\n' +
             '> `/cc-send <label> @user` - Send a secret securely\n' +
-            '> `/cc-inbox` - View secrets shared with you'
+            '> `/cc-inbox` - View secrets shared with you\n\n' +
+            '_Check your DMs for a link to set up end-to-end encryption._'
         ),
       });
     } catch (err) {

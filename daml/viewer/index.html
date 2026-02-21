@@ -282,8 +282,100 @@
         }
       });
 
+      // --- IndexedDB helpers for E2E decryption ---
+      var IDB_NAME = 'cc-encryption-keys';
+      var IDB_STORE = 'private-keys';
+
+      function openIDB() {
+        return new Promise(function(resolve, reject) {
+          var req = indexedDB.open(IDB_NAME, 1);
+          req.onupgradeneeded = function() {
+            req.result.createObjectStore(IDB_STORE, { keyPath: 'party' });
+          };
+          req.onsuccess = function() { resolve(req.result); };
+          req.onerror = function() { reject(req.error); };
+        });
+      }
+
+      function getPrivateKey(db, partyId) {
+        return new Promise(function(resolve, reject) {
+          var tx = db.transaction(IDB_STORE, 'readonly');
+          var store = tx.objectStore(IDB_STORE);
+          var req = store.get(partyId);
+          req.onsuccess = function() { resolve(req.result ? req.result.key : null); };
+          req.onerror = function() { reject(req.error); };
+        });
+      }
+
+      function b64ToBytes(b64) {
+        var bin = atob(b64);
+        var arr = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        return arr;
+      }
+
+      async function decryptSecret(encryptedSecretB64, partyId) {
+        // Try to parse as encrypted envelope
+        var envelopeJson;
+        try {
+          envelopeJson = atob(encryptedSecretB64);
+        } catch (e) {
+          // Not base64 — treat as plaintext (legacy)
+          return { plaintext: encryptedSecretB64, encrypted: false };
+        }
+
+        var envelope;
+        try {
+          envelope = JSON.parse(envelopeJson);
+        } catch (e) {
+          // Not JSON — treat as plaintext (legacy)
+          return { plaintext: encryptedSecretB64, encrypted: false };
+        }
+
+        if (!envelope || envelope.v !== 1) {
+          // Not our encryption format — treat as plaintext (legacy)
+          return { plaintext: encryptedSecretB64, encrypted: false };
+        }
+
+        // It's encrypted — need private key from IndexedDB
+        var db = await openIDB();
+        var privateKey = await getPrivateKey(db, partyId);
+        if (!privateKey) {
+          throw { type: 'nokeys', message: 'Encryption keys not found. Open this link on the device/browser where you registered and set up your keys.' };
+        }
+
+        // RSA-OAEP decrypt the AES key
+        var encryptedAesKey = b64ToBytes(envelope.k);
+        var rawAesKey = await crypto.subtle.decrypt(
+          { name: 'RSA-OAEP' }, privateKey, encryptedAesKey
+        );
+
+        // Import raw AES key
+        var aesKey = await crypto.subtle.importKey(
+          'raw', rawAesKey, { name: 'AES-GCM' }, false, ['decrypt']
+        );
+
+        // Reconstruct ciphertext + authTag (Web Crypto AES-GCM expects them concatenated)
+        var cBytes = b64ToBytes(envelope.c);
+        var tBytes = b64ToBytes(envelope.t);
+        var ivBytes = b64ToBytes(envelope.iv);
+
+        var combined = new Uint8Array(cBytes.length + tBytes.length);
+        combined.set(cBytes, 0);
+        combined.set(tBytes, cBytes.length);
+
+        // AES-GCM decrypt
+        var plainBuffer = await crypto.subtle.decrypt(
+          { name: 'AES-GCM', iv: ivBytes, tagLength: 128 },
+          aesKey, combined
+        );
+
+        var plaintext = new TextDecoder().decode(plainBuffer);
+        return { plaintext: plaintext, encrypted: true };
+      }
+
       // --- Render the secret in the DOM ---
-      function renderSecret(payload) {
+      async function renderSecret(payload) {
         var metaSection = document.getElementById('meta-section');
 
         var rows = [
@@ -314,8 +406,35 @@
           metaSection.appendChild(div);
         });
 
-        // Render secret using textContent (XSS-safe — no innerHTML)
-        document.getElementById('secret-text').textContent = payload.encryptedSecret;
+        // Attempt E2E decryption
+        try {
+          var result = await decryptSecret(payload.encryptedSecret, party);
+          document.getElementById('secret-text').textContent = result.plaintext;
+
+          if (result.encrypted) {
+            // Add E2E badge to meta
+            var badgeDiv = document.createElement('div');
+            badgeDiv.className = 'meta-row';
+            var badgeLabel = document.createElement('span');
+            badgeLabel.className = 'meta-label';
+            badgeLabel.textContent = 'Encryption';
+            var badgeValue = document.createElement('span');
+            badgeValue.className = 'meta-value';
+            badgeValue.style.color = '#3fb950';
+            badgeValue.textContent = 'End-to-end encrypted';
+            badgeDiv.appendChild(badgeLabel);
+            badgeDiv.appendChild(badgeValue);
+            metaSection.appendChild(badgeDiv);
+          }
+        } catch (err) {
+          if (err && err.type === 'nokeys') {
+            showError('Encryption Keys Not Found', err.message);
+            return;
+          }
+          // Decryption failed — show error
+          showError('Decryption Failed', 'Could not decrypt the secret. ' + (err.message || 'The encryption keys may not match.'));
+          return;
+        }
 
         // Show the secret view, hide loading
         document.getElementById('loading-view').style.display = 'none';

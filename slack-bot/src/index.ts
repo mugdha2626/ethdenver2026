@@ -5,13 +5,28 @@
 
 import dotenv from 'dotenv';
 import path from 'path';
+import os from 'os';
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+
+// Auto-detect LAN IP for multi-device testing
+function getLanIp(): string | null {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name] || []) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return null;
+}
 import { App, LogLevel } from '@slack/bolt';
 import { registerCommand } from './commands/register';
 import { sendCommand } from './commands/send';
 import { inboxCommand } from './commands/inbox';
 import { closeDb } from './stores/db';
 import { clearAllMappings, getAllMappings } from './stores/party-mapping';
+import { clearAllEncryptionKeys } from './stores/encryption-keys';
 import { initTimerManager, clearAllTimers } from './stores/secret-timers';
 import { discoverPackageId, allocateParty, setOperatorParty, listParties } from './services/canton';
 import { startWebServer } from './web/server';
@@ -81,31 +96,44 @@ async function start(): Promise<void> {
     if (!anyValid) {
       console.log('  Detected fresh Canton sandbox — clearing stale local data...');
       clearAllMappings();
+      clearAllEncryptionKeys();
     }
   }
 
   // Start the web viewer for zero-knowledge secret viewing
   const webPort = parseInt(process.env.WEB_PORT || '3100', 10);
-  startWebServer(webPort);
+
+  // Auto-detect LAN IP so Slack DM links work from other devices on the same network
+  const lanIp = getLanIp();
+  if (!process.env.WEB_BASE_URL && lanIp) {
+    process.env.WEB_BASE_URL = `http://${lanIp}:${webPort}`;
+  }
+
+  startWebServer(webPort, app);
 
   // Purge expired view tokens periodically
   purgeExpiredTokens();
   setInterval(purgeExpiredTokens, 60 * 60 * 1000);
 
   await app.start();
+  const webBaseUrl = process.env.WEB_BASE_URL || `http://localhost:${webPort}`;
   console.log('');
-  console.log('  ╔══════════════════════════════════════════════════╗');
-  console.log('  ║        ConfidentialConnect is running!           ║');
-  console.log('  ║                                                  ║');
-  console.log('  ║  Slack Bot:  Connected (Socket Mode)             ║');
-  console.log(`  ║  Canton API: ${process.env.CANTON_JSON_API_URL || 'http://localhost:7575'}        ║`);
-  console.log(`  ║  Web Viewer: http://localhost:${webPort}                 ║`);
-  console.log('  ║                                                  ║');
-  console.log('  ║  Commands:                                       ║');
-  console.log('  ║    /cc-register  - Register Canton identity      ║');
-  console.log('  ║    /cc-send      - Send secret to someone        ║');
-  console.log('  ║    /cc-inbox     - View received secrets         ║');
-  console.log('  ╚══════════════════════════════════════════════════╝');
+  console.log('  ╔══════════════════════════════════════════════════════╗');
+  console.log('  ║          ConfidentialConnect is running!             ║');
+  console.log('  ║                                                      ║');
+  console.log('  ║  Slack Bot:  Connected (Socket Mode)                 ║');
+  console.log(`  ║  Canton API: ${(process.env.CANTON_JSON_API_URL || 'http://localhost:7575').padEnd(40)}║`);
+  console.log(`  ║  Web Viewer: ${`http://localhost:${webPort}`.padEnd(40)}║`);
+  if (lanIp) {
+  console.log(`  ║  LAN Access: ${`http://${lanIp}:${webPort}`.padEnd(40)}║`);
+  }
+  console.log(`  ║  DM Links:   ${webBaseUrl.padEnd(40)}║`);
+  console.log('  ║                                                      ║');
+  console.log('  ║  Commands:                                           ║');
+  console.log('  ║    /cc-register  - Register Canton identity          ║');
+  console.log('  ║    /cc-send      - Send secret to someone            ║');
+  console.log('  ║    /cc-inbox     - View received secrets             ║');
+  console.log('  ╚══════════════════════════════════════════════════════╝');
   console.log('');
 }
 

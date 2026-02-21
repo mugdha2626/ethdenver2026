@@ -1,20 +1,22 @@
 /**
  * /cc-send <label> @user - Send an actual secret to someone via Canton
- * The secret travels through Canton's privacy protocol, not through Slack
+ *
+ * E2E encryption flow: Instead of a Slack modal (which would expose the secret to Slack),
+ * this command generates a short-lived compose link. The sender opens the link in their
+ * browser, types the secret there, and the browser encrypts it with the recipient's
+ * public key before sending. The plaintext secret never touches Slack or our servers.
  */
 
 import type { App } from '@slack/bolt';
-import { createContract, getOperatorParty } from '../services/canton';
 import { getPartyBySlackId, getPartyByUsername } from '../stores/party-mapping';
-import { successMessage, errorMessage, notifyUser, inboxItemWithLink, header, divider, context } from '../utils/slack-blocks';
-import { trackSecret } from '../stores/secret-timers';
-import { createViewToken } from '../stores/view-tokens';
-
-const webBaseUrl = process.env.WEB_BASE_URL || 'http://localhost:3100';
+import { hasEncryptionKeys } from '../stores/encryption-keys';
+import { createSendToken } from '../stores/send-tokens';
+import { errorMessage } from '../utils/slack-blocks';
 
 export function sendCommand(app: App): void {
-  app.command('/cc-send', async ({ command, ack, client, respond }) => {
+  app.command('/cc-send', async ({ command, ack, respond }) => {
     await ack();
+    const webBaseUrl = process.env.WEB_BASE_URL || 'http://localhost:3100';
 
     const mapping = getPartyBySlackId(command.user_id);
     if (!mapping) {
@@ -70,173 +72,47 @@ export function sendCommand(app: App): void {
       return;
     }
 
-    // Open modal for secure secret input
-    await client.views.open({
-      trigger_id: command.trigger_id,
-      view: {
-        type: 'modal',
-        callback_id: 'send_secret_modal',
-        private_metadata: JSON.stringify({
-          label,
-          recipientSlackId,
-          recipientParty: recipientMapping.cantonParty,
-          channelId: command.channel_id,
-        }),
-        title: { type: 'plain_text', text: 'Send Secret' },
-        submit: { type: 'plain_text', text: 'Send Securely' },
-        blocks: [
-          {
-            type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text:
-                `*Sending secret \`${label}\` to <@${recipientSlackId}>*\n\n` +
-                'The secret will travel through Canton\'s privacy protocol. ' +
-                'Only you and the recipient will ever see it -- not even Canton stores it permanently.',
-            },
-          },
-          {
-            type: 'input',
-            block_id: 'secret_input',
-            label: { type: 'plain_text', text: 'Secret' },
-            element: {
-              type: 'plain_text_input',
-              action_id: 'secret_value',
-              placeholder: { type: 'plain_text', text: 'Paste the secret here...' },
-              multiline: true,
-            },
-          },
-          {
-            type: 'input',
-            block_id: 'description_input',
-            label: { type: 'plain_text', text: 'Description' },
-            element: {
-              type: 'plain_text_input',
-              action_id: 'description_value',
-              placeholder: { type: 'plain_text', text: 'e.g., Production AWS key for deployment' },
-              multiline: false,
-            },
-            optional: true,
-          },
-          {
-            type: 'input',
-            block_id: 'ttl_input',
-            label: { type: 'plain_text', text: 'Expiration' },
-            element: {
-              type: 'static_select',
-              action_id: 'ttl_value',
-              placeholder: { type: 'plain_text', text: 'Choose expiration...' },
-              initial_option: {
-                text: { type: 'plain_text', text: 'No expiration' },
-                value: 'none',
-              },
-              options: [
-                { text: { type: 'plain_text', text: 'No expiration' }, value: 'none' },
-                { text: { type: 'plain_text', text: '30 seconds' }, value: '30' },
-                { text: { type: 'plain_text', text: '5 minutes' }, value: '300' },
-                { text: { type: 'plain_text', text: '1 hour' }, value: '3600' },
-                { text: { type: 'plain_text', text: '24 hours' }, value: '86400' },
-                { text: { type: 'plain_text', text: '7 days' }, value: '604800' },
-              ],
-            },
-            optional: false,
-          },
-        ],
-      },
-    });
-  });
-
-  // Handle modal submission
-  app.view('send_secret_modal', async ({ ack, view, body }) => {
-    await ack();
-
-    const { label, recipientSlackId, recipientParty, channelId } = JSON.parse(
-      view.private_metadata
-    );
-    const secret = view.state.values.secret_input.secret_value.value!;
-    const description =
-      view.state.values.description_input?.description_value?.value || 'No description';
-    const ttlSeconds = view.state.values.ttl_input.ttl_value.selected_option?.value || 'none';
-    const slackUserId = body.user.id;
-
-    const mapping = getPartyBySlackId(slackUserId);
-    if (!mapping) return;
-
-    try {
-      // Create SecretTransfer contract on Canton
-      // ONLY sender and recipient nodes receive this data
-      const sentAt = new Date();
-      const expiresAt =
-        ttlSeconds !== 'none'
-          ? new Date(sentAt.getTime() + Number(ttlSeconds) * 1000).toISOString()
-          : null;
-
-      const contractResult = await createContract(mapping.cantonParty, 'SecretTransfer', {
-        sender: mapping.cantonParty,
-        recipient: recipientParty,
-        operator: getOperatorParty(),
-        label,
-        encryptedSecret: secret,
-        description,
-        sentAt: sentAt.toISOString(),
-        expiresAt,
+    // Check that recipient has set up encryption keys
+    if (!hasEncryptionKeys(recipientMapping.cantonParty)) {
+      await respond({
+        response_type: 'ephemeral',
+        blocks: errorMessage(
+          'Recipient Has No Encryption Keys',
+          `<@${recipientSlackId}> hasn't set up their encryption keys yet. Ask them to check their DMs for the setup link (sent after \`/cc-register\`).`
+        ),
       });
-
-      const contractId = contractResult.contractId;
-      const senderDisplay = `<@${slackUserId}>`;
-
-      // Notify sender
-      await notifyUser(app.client, slackUserId, successMessage(
-        'Secret Sent',
-        `Secret \`${label}\` sent to <@${recipientSlackId}>.\n\n` +
-          '*Only you and the recipient can see this on Canton.* No other node on the network received this data.\n\n' +
-          `The recipient will receive a DM with the secret.`
-      ), channelId);
-
-      // Generate a one-time view token and build the web URL
-      const viewToken = createViewToken(contractId, recipientParty, recipientSlackId, expiresAt);
-      const viewUrl = `${webBaseUrl}/secret/${viewToken}`;
-
-      // DM the recipient — one-time link only, NO secret content
-      try {
-        const dmBlocks = [
-          header('Secret Received'),
-          divider(),
-          ...inboxItemWithLink(senderDisplay, label, description, sentAt.toISOString(), contractId, viewUrl, expiresAt),
-          context(
-            'The secret is stored *only on Canton* — it never touches Slack.',
-            'Click the link above to view the secret in your browser (one-time use).'
-          ),
-        ];
-
-        const result = await app.client.chat.postMessage({
-          channel: recipientSlackId,
-          blocks: dmBlocks,
-          text: `${senderDisplay} sent you a secret labeled '${label}'`,
-        });
-
-        if (result.ts && result.channel) {
-          trackSecret(
-            contractId,
-            result.ts,
-            result.channel,
-            label,
-            senderDisplay,
-            expiresAt,
-            description,
-            sentAt.toISOString(),
-            viewUrl
-          );
-        }
-      } catch {
-        console.warn(`Could not DM ${recipientSlackId}`);
-      }
-    } catch (err) {
-      console.error('Send error:', err);
-      await notifyUser(app.client, slackUserId, errorMessage(
-        'Send Failed',
-        `Error: ${err instanceof Error ? err.message : 'Unknown error'}`
-      ), channelId);
+      return;
     }
+
+    // Create a short-lived send token and build compose URL
+    const sendToken = createSendToken(
+      mapping.cantonParty,
+      command.user_id,
+      recipientMapping.cantonParty,
+      recipientSlackId,
+      label
+    );
+
+    const composeUrl = `${webBaseUrl}/compose/${sendToken}`;
+
+    await respond({
+      response_type: 'ephemeral',
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text:
+              `*Ready to send secret \`${label}\` to <@${recipientSlackId}>*\n\n` +
+              `Open this link to compose and encrypt your secret:\n<${composeUrl}|Compose Secret>\n\n` +
+              '_Your secret is encrypted in your browser — it never passes through Slack or our servers._',
+          },
+        },
+        {
+          type: 'context',
+          elements: [{ type: 'mrkdwn', text: 'This link expires in 10 minutes.' }],
+        },
+      ],
+    });
   });
 }

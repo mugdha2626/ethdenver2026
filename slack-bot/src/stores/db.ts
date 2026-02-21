@@ -46,6 +46,25 @@ function initTables(db: Database.Database): void {
       revoked INTEGER NOT NULL DEFAULT 0
     );
     CREATE INDEX IF NOT EXISTS idx_view_tokens_contract ON view_tokens(contract_id);
+
+    CREATE TABLE IF NOT EXISTS encryption_keys (
+      canton_party TEXT PRIMARY KEY,
+      slack_user_id TEXT NOT NULL,
+      public_key_spki TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS send_tokens (
+      token TEXT PRIMARY KEY,
+      sender_party TEXT NOT NULL,
+      sender_slack_id TEXT NOT NULL,
+      recipient_party TEXT NOT NULL,
+      recipient_slack_id TEXT NOT NULL,
+      label TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      consumed_at TEXT
+    );
   `);
 }
 
