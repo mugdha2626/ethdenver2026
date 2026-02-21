@@ -179,6 +179,29 @@ You should see:
   ╚══════════════════════════════════════════════════╝
 ```
 
+### 7. Multi-Device Demo Access
+
+Cloak's web viewer needs to be reachable from the device opening the secret link. Three options:
+
+**Option A: LAN (zero setup)**
+If the demo devices are on the same Wi-Fi network, Cloak auto-detects your LAN IP and uses it for DM links. Nothing to configure.
+
+**Option B: ngrok (recommended for demos)**
+For internet-accessible links (e.g. audience phones on conference Wi-Fi):
+
+1. Sign up at [ngrok.com](https://ngrok.com) and copy your authtoken
+2. Add to `.env`:
+   ```
+   NGROK_AUTHTOKEN=your-token-here
+   ```
+3. Restart the bot — the startup banner will show the public ngrok URL and all DM links will use it automatically.
+
+**Option C: Tailscale (persistent)**
+For a stable URL across sessions, install [Tailscale](https://tailscale.com) and set `WEB_BASE_URL` manually:
+```
+WEB_BASE_URL=http://your-machine.tail1234.ts.net:3100
+```
+
 ---
 
 ## Commands

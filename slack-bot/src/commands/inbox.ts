@@ -10,11 +10,10 @@ import { errorMessage, header, inboxItemWithLink, section, context, divider } fr
 import { getTrackedSecret, untrackSecret } from '../stores/secret-timers';
 import { createViewToken, revokeTokensForContract } from '../stores/view-tokens';
 
-const webBaseUrl = process.env.WEB_BASE_URL || 'http://localhost:3100';
-
 export function inboxCommand(app: App): void {
   app.command('/cloak-inbox', async ({ command, ack, respond }) => {
     await ack();
+    const webBaseUrl = process.env.WEB_BASE_URL || 'http://localhost:3100';
 
     const mapping = getPartyBySlackId(command.user_id);
     if (!mapping) {
@@ -129,6 +128,7 @@ export function inboxCommand(app: App): void {
   // Generates a one-time token and DMs the user a link instead of opening a modal.
   app.action('view_secret', async ({ ack, body, client }) => {
     await ack();
+    const webBaseUrl = process.env.WEB_BASE_URL || 'http://localhost:3100';
 
     if (body.type !== 'block_actions' || !body.actions[0]) return;
 

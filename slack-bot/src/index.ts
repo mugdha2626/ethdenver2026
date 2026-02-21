@@ -20,6 +20,24 @@ function getLanIp(): string | null {
   }
   return null;
 }
+// ngrok tunnel listener — kept at module scope for graceful shutdown
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let ngrokListener: any = null;
+
+async function startNgrokTunnel(port: number): Promise<string | null> {
+  if (!process.env.NGROK_AUTHTOKEN) return null;
+  try {
+    // Dynamic import so the app still works without @ngrok/ngrok installed
+    const ngrok = await Function('return import("@ngrok/ngrok")')();
+    ngrokListener = await ngrok.forward({ addr: port, authtoken_from_env: true });
+    const url: string = ngrokListener.url();
+    return url;
+  } catch {
+    // @ngrok/ngrok not installed or tunnel failed — silently skip
+    return null;
+  }
+}
+
 import { App, LogLevel } from '@slack/bolt';
 import { registerCommand } from './commands/register';
 import { sendCommand } from './commands/send';
@@ -111,6 +129,12 @@ async function start(): Promise<void> {
 
   startWebServer(webPort, app);
 
+  // Attempt ngrok tunnel for public demo access
+  const ngrokUrl = await startNgrokTunnel(webPort);
+  if (ngrokUrl) {
+    process.env.WEB_BASE_URL = ngrokUrl;
+  }
+
   // Purge expired view tokens periodically
   purgeExpiredTokens();
   setInterval(purgeExpiredTokens, 60 * 60 * 1000);
@@ -127,6 +151,9 @@ async function start(): Promise<void> {
   if (lanIp) {
   console.log(`  ║  LAN Access: ${`http://${lanIp}:${webPort}`.padEnd(40)}║`);
   }
+  if (ngrokUrl) {
+  console.log(`  ║  ngrok:      ${ngrokUrl.padEnd(40)}║`);
+  }
   console.log(`  ║  DM Links:   ${webBaseUrl.padEnd(40)}║`);
   console.log('  ║                                                      ║');
   console.log('  ║  Commands:                                           ║');
@@ -138,14 +165,16 @@ async function start(): Promise<void> {
 }
 
 // Graceful shutdown
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
   console.log('\nShutting down...');
+  if (ngrokListener) await ngrokListener.close().catch(() => {});
   clearAllTimers();
   closeDb();
   process.exit(0);
 });
 
-process.on('SIGTERM', () => {
+process.on('SIGTERM', async () => {
+  if (ngrokListener) await ngrokListener.close().catch(() => {});
   clearAllTimers();
   closeDb();
   process.exit(0);
