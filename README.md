@@ -63,8 +63,7 @@ daml json-api --ledger-host localhost --ledger-port 6865 --http-port 7575 --allo
 2. **Socket Mode** → ON → create app-level token (`connections:write`) → copy `xapp-...` token
 3. **OAuth & Permissions** → add scopes: `commands`, `chat:write`, `users:read`
 4. **Install to Workspace** → copy `xoxb-...` token
-5. **Slash Commands** → create: `/cloak-register`, `/cloak-send`, `/cloak-inbox`, `/cloak-status`, `/cloak-commit`, `/cloak-verify`, `/cloak-prove`, `/cloak-audit`
-
+5. **Slash Commands** → create: `/cloak-register`, `/cloak-send`, `/cloak-inbox`
 ### 4. Configure and run
 
 ```bash
