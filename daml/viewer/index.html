@@ -9,159 +9,467 @@
   <title>Cloak — Secret</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-15px); }
+    }
+
+    @keyframes shimmer {
+      0% { transform: translateX(-150%); opacity: 0; }
+      50% { opacity: 1; }
+      100% { transform: translateX(150%); opacity: 0; }
+    }
+
+    @keyframes gradientShift {
+      0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.6; }
+      33% { transform: translate(30px, -40px) scale(1.1); opacity: 0.8; }
+      66% { transform: translate(-40px, 30px) scale(0.95); opacity: 0.7; }
+    }
+
+    @keyframes meshMove {
+      0%, 100% {
+        background-position: 0% 50%;
+      }
+      50% {
+        background-position: 100% 50%;
+      }
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
     body {
-      background: #0d1117;
-      color: #c9d1d9;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-      display: flex;
-      justify-content: center;
-      align-items: flex-start;
+      background:
+        radial-gradient(ellipse 800px 600px at 10% 20%, rgba(88, 28, 135, 0.35) 0%, transparent 50%),
+        radial-gradient(ellipse 600px 800px at 90% 80%, rgba(139, 92, 246, 0.3) 0%, transparent 50%),
+        radial-gradient(ellipse 700px 500px at 50% 50%, rgba(59, 130, 246, 0.2) 0%, transparent 50%),
+        radial-gradient(ellipse 900px 700px at 30% 70%, rgba(168, 85, 247, 0.25) 0%, transparent 60%),
+        linear-gradient(135deg, #0a0015 0%, #050510 25%, #000000 50%, #0a0520 75%, #050515 100%);
+      background-size: 400% 400%;
+      animation: meshMove 20s ease infinite;
       min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       padding: 2rem 1rem;
+      font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Roboto Mono', 'Courier New', monospace;
+      position: relative;
+      overflow-x: hidden;
     }
+
+
+    /* Animated gradient orbs */
+    .gradient-orb {
+      position: fixed;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 0;
+      filter: blur(80px);
+      mix-blend-mode: screen;
+    }
+
+    .gradient-orb-1 {
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(139, 92, 246, 0.5) 0%, rgba(139, 92, 246, 0) 70%);
+      top: -200px;
+      right: -200px;
+      animation: gradientShift 15s ease-in-out infinite;
+    }
+
+    .gradient-orb-2 {
+      width: 500px;
+      height: 500px;
+      background: radial-gradient(circle, rgba(59, 130, 246, 0.4) 0%, rgba(59, 130, 246, 0) 70%);
+      bottom: -150px;
+      left: -150px;
+      animation: gradientShift 18s ease-in-out infinite;
+      animation-delay: -6s;
+    }
+
+    .gradient-orb-3 {
+      width: 450px;
+      height: 450px;
+      background: radial-gradient(circle, rgba(168, 85, 247, 0.35) 0%, rgba(168, 85, 247, 0) 70%);
+      top: 40%;
+      left: 40%;
+      animation: gradientShift 20s ease-in-out infinite;
+      animation-delay: -12s;
+    }
+
+    .gradient-orb-4 {
+      width: 400px;
+      height: 400px;
+      background: radial-gradient(circle, rgba(99, 102, 241, 0.3) 0%, rgba(99, 102, 241, 0) 70%);
+      top: 20%;
+      right: 30%;
+      animation: gradientShift 16s ease-in-out infinite;
+      animation-delay: -4s;
+    }
+
+
     .container {
-      max-width: 640px;
+      max-width: 700px;
       width: 100%;
+      position: relative;
+      z-index: 10;
     }
+
     h1 {
-      color: #58a6ff;
-      font-size: 1.5rem;
-      margin-bottom: 1.5rem;
+      color: #ffffff;
+      font-size: 2.5rem;
+      margin-bottom: 2.5rem;
+      text-align: center;
+      text-transform: uppercase;
+      letter-spacing: 3px;
+      font-weight: 700;
+      text-shadow: 0 0 40px rgba(139, 92, 246, 0.6);
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1.5rem;
     }
+
+    h1::before,
+    h1::after {
+      content: '⬢';
+      font-size: 1rem;
+      color: rgba(139, 92, 246, 0.7);
+    }
+
+    /* Glassmorphism cards */
+    .glass-card {
+      background: rgba(15, 15, 20, 0.7);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(139, 92, 246, 0.2);
+      border-radius: 16px;
+      box-shadow:
+        0 8px 32px 0 rgba(0, 0, 0, 0.6),
+        inset 0 1px 0 0 rgba(139, 92, 246, 0.1);
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+
+    .glass-card:hover {
+      border-color: rgba(139, 92, 246, 0.4);
+      box-shadow:
+        0 12px 48px 0 rgba(0, 0, 0, 0.7),
+        0 0 30px rgba(139, 92, 246, 0.2);
+    }
+
+    .glass-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -150%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.1), transparent);
+      animation: shimmer 4s ease-in-out infinite;
+    }
+
     .loading {
       text-align: center;
       padding: 3rem 1rem;
     }
+
     .loading p {
-      color: #8b949e;
+      color: #b8c5d6;
       font-size: 0.95rem;
       margin-bottom: 0.5rem;
     }
+
     .spinner {
       display: inline-block;
-      width: 24px;
-      height: 24px;
-      border: 3px solid #30363d;
-      border-top-color: #58a6ff;
+      width: 32px;
+      height: 32px;
+      border: 3px solid rgba(139, 92, 246, 0.2);
+      border-top-color: rgba(139, 92, 246, 1);
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
       margin-bottom: 1rem;
+      box-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
+
     .meta {
-      background: #161b22;
-      border: 1px solid #30363d;
-      border-radius: 6px;
-      padding: 1rem;
-      margin-bottom: 1.5rem;
+      margin-bottom: 2rem;
     }
+
     .meta-row {
-      display: flex;
-      margin-bottom: 0.5rem;
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: 1.5rem;
+      padding: 1.1rem 1.8rem;
+      border-bottom: 1px solid rgba(139, 92, 246, 0.1);
+      transition: all 0.3s ease;
+      position: relative;
     }
-    .meta-row:last-child { margin-bottom: 0; }
+
+    .meta-row::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: rgba(139, 92, 246, 0.6);
+      transform: scaleY(0);
+      transition: transform 0.3s ease;
+    }
+
+    .meta-row:hover::before {
+      transform: scaleY(1);
+    }
+
+    .meta-row:hover {
+      background: rgba(139, 92, 246, 0.08);
+      padding-left: 2rem;
+    }
+
+    .meta-row:last-child {
+      border-bottom: none;
+    }
+
     .meta-label {
-      color: #8b949e;
-      width: 100px;
-      flex-shrink: 0;
-      font-size: 0.85rem;
-    }
-    .meta-value {
-      color: #c9d1d9;
-      font-size: 0.85rem;
-      word-break: break-all;
-    }
-    .secret-box {
-      background: #161b22;
-      border: 1px solid #30363d;
-      border-radius: 6px;
-      padding: 1rem;
-      margin-bottom: 1rem;
-    }
-    .secret-label {
-      color: #8b949e;
-      font-size: 0.75rem;
+      color: rgba(50, 100, 200, 1);
+      font-size: 0.7rem;
+      font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 0.5rem;
+      letter-spacing: 1.5px;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
     }
-    .secret-content {
-      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+
+    .meta-label::before {
+      content: '>';
+      font-size: 0.7rem;
+      opacity: 0.7;
+    }
+
+    .meta-value {
+      color: rgba(255, 255, 255, 0.95);
+      font-size: 0.85rem;
+      font-weight: 400;
+      word-break: break-word;
+    }
+
+    .meta-value.e2e {
+      color: #4ade80;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .meta-value.e2e::before {
+      content: '[✓]';
+      font-size: 0.75rem;
+    }
+
+    .secret-box {
+      margin-bottom: 2rem;
+    }
+
+    .secret-label {
+      color: rgba(50, 100, 200, 1);
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      padding: 1.3rem 1.8rem 0.9rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      border-bottom: 1px solid rgba(139, 92, 246, 0.15);
+    }
+
+    .secret-label::before {
+      content: '//';
       font-size: 0.9rem;
-      color: #f0f6fc;
+      opacity: 0.7;
+    }
+
+    .secret-content {
+      font-size: 0.95rem;
+      color: rgba(255, 255, 255, 1);
       white-space: pre-wrap;
       word-break: break-all;
-      line-height: 1.5;
+      line-height: 1.8;
+      padding: 1.3rem 1.8rem 1.5rem;
+      position: relative;
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 0 0 16px 16px;
+      font-family: 'Courier New', 'Courier', monospace;
+      font-weight: 600;
+      letter-spacing: 0.3px;
     }
+
     .actions {
-      display: flex;
-      gap: 0.75rem;
-      margin-bottom: 1.5rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 2rem;
     }
+
     button {
-      background: #21262d;
-      color: #c9d1d9;
-      border: 1px solid #30363d;
-      border-radius: 6px;
-      padding: 0.5rem 1rem;
-      font-size: 0.85rem;
+      background: rgba(25, 25, 30, 0.8);
+      backdrop-filter: blur(10px);
+      color: rgba(255, 255, 255, 0.95);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      border-radius: 10px;
+      padding: 0.95rem 1.5rem;
+      font-size: 0.75rem;
+      font-weight: 600;
       cursor: pointer;
-      transition: background 0.15s;
+      transition: all 0.3s ease;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      position: relative;
+      overflow: hidden;
+      font-family: inherit;
     }
-    button:hover { background: #30363d; }
-    .btn-copy { background: #238636; border-color: #2ea043; color: #fff; }
-    .btn-copy:hover { background: #2ea043; }
+
+    button::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      background: rgba(139, 92, 246, 0.4);
+      transform: translate(-50%, -50%);
+      transition: width 0.6s ease, height 0.6s ease;
+    }
+
+    button:hover::before {
+      width: 300px;
+      height: 300px;
+    }
+
+    button:hover {
+      background: rgba(35, 35, 45, 0.9);
+      border-color: rgba(139, 92, 246, 0.6);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    }
+
+    .btn-copy {
+      background: rgba(139, 92, 246, 0.25);
+      border: 1px solid rgba(139, 92, 246, 0.6);
+    }
+
+    .btn-copy:hover {
+      background: rgba(139, 92, 246, 0.35);
+      border-color: rgba(139, 92, 246, 0.8);
+      box-shadow: 0 8px 32px rgba(139, 92, 246, 0.5);
+    }
+
     .timer {
-      color: #8b949e;
-      font-size: 0.8rem;
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 0.75rem;
       text-align: center;
+      padding: 1.1rem;
+      background: rgba(15, 15, 20, 0.6);
+      backdrop-filter: blur(10px);
+      border-radius: 10px;
+      border: 1px solid rgba(139, 92, 246, 0.2);
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
     }
+
+    .timer::before {
+      content: '[⬢]';
+      font-size: 0.7rem;
+      color: rgba(139, 92, 246, 0.7);
+    }
+
     .cleared {
       text-align: center;
-      padding: 3rem 1rem;
+      padding: 4rem 2rem;
     }
+
     .cleared h2 {
-      color: #8b949e;
-      font-size: 1.2rem;
-      margin-bottom: 0.5rem;
-    }
-    .cleared p {
-      color: #484f58;
-      font-size: 0.85rem;
-    }
-    .error-view {
-      text-align: center;
-      padding: 3rem 1rem;
-    }
-    .error-view h2 {
-      color: #f85149;
+      color: rgba(50, 100, 200, 1);
       font-size: 1.5rem;
       margin-bottom: 1rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
     }
-    .error-view p {
-      color: #8b949e;
+
+    .cleared h2::before {
+      content: '✓ ';
+      color: #4ade80;
+    }
+
+    .cleared p {
+      color: #b8c5d6;
       font-size: 0.95rem;
-      line-height: 1.5;
+      margin-bottom: 0.5rem;
     }
+
+    .error-view {
+      text-align: center;
+      padding: 4rem 2rem;
+    }
+
+    .error-view h2 {
+      color: #ff6b6b;
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      text-shadow: 0 0 10px rgba(255, 107, 107, 0.5);
+    }
+
+    .error-view h2::before {
+      content: '⚠️ ';
+    }
+
+    .error-view p {
+      color: #e0e6ed;
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+
     @media print {
       .secret-content { color: transparent !important; }
       .secret-content::after { content: '[REDACTED]'; color: #8b949e; }
     }
+
+    @media (max-width: 768px) {
+      h1 { font-size: 2rem; letter-spacing: 6px; }
+      .meta-row { grid-template-columns: 1fr; gap: 0.5rem; }
+      .actions { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
+  <div class="gradient-orb gradient-orb-1"></div>
+  <div class="gradient-orb gradient-orb-2"></div>
+  <div class="gradient-orb gradient-orb-3"></div>
+  <div class="gradient-orb gradient-orb-4"></div>
+
   <div class="container" id="loading-view">
-    <h1>Cloak</h1>
-    <div class="loading">
+    <h1>CLOAK</h1>
+    <div class="glass-card loading">
       <div class="spinner"></div>
       <p>Fetching secret from Canton ledger...</p>
     </div>
   </div>
 
   <div class="container" id="secret-view" style="display:none;">
-    <h1>Cloak</h1>
-    <div class="meta" id="meta-section"></div>
-    <div class="secret-box">
+    <h1>CLOAK</h1>
+    <div class="glass-card meta" id="meta-section"></div>
+    <div class="glass-card secret-box">
       <div class="secret-label">Secret</div>
       <div class="secret-content" id="secret-text"></div>
     </div>
@@ -172,13 +480,13 @@
     <div class="timer" id="timer">This page will auto-clear in 5 minutes.</div>
   </div>
 
-  <div class="container cleared" id="cleared-view" style="display:none;">
+  <div class="container glass-card cleared" id="cleared-view" style="display:none;">
     <h2>Secret Cleared</h2>
     <p>The secret has been removed from this page for your security.</p>
     <p>You can close this tab.</p>
   </div>
 
-  <div class="container error-view" id="error-view" style="display:none;">
+  <div class="container glass-card error-view" id="error-view" style="display:none;">
     <h2 id="error-title"></h2>
     <p id="error-message"></p>
   </div>
@@ -286,7 +594,7 @@
       });
 
       // --- IndexedDB helpers for E2E decryption ---
-      var IDB_NAME = 'cloak-encryption-keys';
+      var IDB_NAME = 'cc-encryption-keys';
       var IDB_STORE = 'private-keys';
 
       function openIDB() {
@@ -461,8 +769,7 @@
             badgeLabel.className = 'meta-label';
             badgeLabel.textContent = 'Encryption';
             var badgeValue = document.createElement('span');
-            badgeValue.className = 'meta-value';
-            badgeValue.style.color = '#3fb950';
+            badgeValue.className = 'meta-value e2e';
             badgeValue.textContent = 'End-to-end encrypted';
             badgeDiv.appendChild(badgeLabel);
             badgeDiv.appendChild(badgeValue);
